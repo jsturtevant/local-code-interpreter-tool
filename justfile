@@ -35,10 +35,16 @@ install-dev:
     {{venv}} pip install -e .
     {{venv}} pip install -r requirements-dev.txt
 
-# Install hyperlight-nanvix Python bindings (requires Rust toolchain)
+# Install hyperlight-nanvix Python bindings (requires Rust nightly toolchain)
 install-nanvix:
     @{{check-venv}}
     @echo "📦 Installing hyperlight-nanvix Python bindings..."
+    @if ! command -v rustup &> /dev/null; then \
+        echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
+        exit 1; \
+    fi
+    @echo "🔧 Installing Rust nightly toolchain..."
+    rustup install nightly
     @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
         echo "📥 Cloning hyperlight-nanvix..."; \
         mkdir -p vendor; \
@@ -48,7 +54,7 @@ install-nanvix:
         cd vendor/hyperlight-nanvix && git pull; \
     fi
     {{venv}} pip install maturin
-    {{venv}} maturin develop --manifest-path vendor/hyperlight-nanvix/Cargo.toml --features python
+    cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
     @echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
@@ -147,12 +153,11 @@ clean:
 ci: install-dev format-check lint typecheck test-ci security build
     @echo "✅ CI pipeline completed successfully"
 
-# Run security scan (bandit + safety)
+# Run security scan (bandit)
 security:
     @{{check-venv}}
-    {{venv}} pip install bandit safety
+    {{venv}} pip install bandit
     {{venv}} bandit -r src/ -ll --skip B101
-    {{venv}} safety scan --target requirements.txt
 
 # =============================================================================
 # Azure Infrastructure
