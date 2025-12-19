@@ -352,21 +352,3 @@ async def main() -> None:
         await run_interactive_session(environment=environment)
     else:
         await run_example_queries(environment=environment)
-
-
-if __name__ == "__main__":
-    import sys
-
-    # Handle --devui before entering async context (serve() runs its own event loop)
-    if "--devui" in sys.argv:
-        verbose = "--verbose" in sys.argv or "-v" in sys.argv
-        environment = "hyperlight" if "--hyperlight" in sys.argv else "python"
-        port = 8090
-        auto_open = "--no-browser" not in sys.argv
-        for arg in sys.argv:
-            if arg.startswith("--port="):
-                port = int(arg.split("=")[1])
-        _configure_logging(verbose=verbose)
-        run_devui(environment=environment, port=port, auto_open=auto_open)
-    else:
-        asyncio.run(main())

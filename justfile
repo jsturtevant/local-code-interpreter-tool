@@ -46,17 +46,17 @@ update:
 # Run the full agent
 run *args:
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter.agent {{args}}
+    {{venv}} python -m local_code_interpreter {{args}}
 
 # Run in interactive chat mode
 interactive *args:
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter.agent --interactive {{args}}
+    {{venv}} python -m local_code_interpreter --interactive {{args}}
 
 # Launch the DevUI web interface for testing
 devui *args:
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter.agent --devui {{args}}
+    {{venv}} python -m local_code_interpreter --devui {{args}}
 
 # =============================================================================
 # Code Quality
