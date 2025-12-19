@@ -21,6 +21,7 @@ setup:
     {{venv}} pip install --upgrade pip
     {{venv}} pip install -r requirements.txt
     {{venv}} pip install -e .
+    just install-nanvix
     @echo "✅ Virtual environment ready. Run: source .venv/bin/activate"
 
 # Install dependencies only (requires venv to exist)
@@ -33,6 +34,22 @@ install-dev:
     @{{check-venv}}
     {{venv}} pip install -e .
     {{venv}} pip install -r requirements-dev.txt
+
+# Install hyperlight-nanvix Python bindings (requires Rust toolchain)
+install-nanvix:
+    @{{check-venv}}
+    @echo "📦 Installing hyperlight-nanvix Python bindings..."
+    @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
+        echo "📥 Cloning hyperlight-nanvix..."; \
+        mkdir -p vendor; \
+        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix; \
+    else \
+        echo "📥 Updating hyperlight-nanvix..."; \
+        cd vendor/hyperlight-nanvix && git pull; \
+    fi
+    {{venv}} pip install maturin
+    cd vendor/hyperlight-nanvix && {{venv}} maturin develop --features python
+    @echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
 update:
