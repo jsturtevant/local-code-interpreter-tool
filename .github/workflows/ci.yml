@@ -32,7 +32,7 @@ jobs:
         uses: extractions/setup-just@v3
 
       - name: Set up Rust nightly
-        uses: dtolnay/rust-action@nightly
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Setup environment
         run: just setup
@@ -71,7 +71,7 @@ jobs:
         uses: extractions/setup-just@v3
 
       - name: Set up Rust nightly
-        uses: dtolnay/rust-action@nightly
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Setup environment
         run: just setup
@@ -114,7 +114,7 @@ jobs:
         uses: extractions/setup-just@v3
 
       - name: Set up Rust nightly
-        uses: dtolnay/rust-action@nightly
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Build package
         run: just build
@@ -149,7 +149,7 @@ jobs:
         uses: extractions/setup-just@v3
 
       - name: Set up Rust nightly
-        uses: dtolnay/rust-action@nightly
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Setup environment
         run: just setup
