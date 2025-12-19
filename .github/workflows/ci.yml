@@ -1,0 +1,147 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ==========================================================================
+  # Code Quality Checks
+  # ==========================================================================
+  lint:
+    name: Lint, Format & Type Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Setup environment
+        run: just setup
+
+      - name: Check formatting with Black
+        run: just format-check
+
+      - name: Lint with Ruff
+        run: just lint
+
+      - name: Type check with mypy
+        run: just typecheck
+
+  # ==========================================================================
+  # Tests
+  # ==========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Setup environment
+        run: just setup
+
+      - name: Run tests with coverage
+        run: just test-ci
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-artifacts
+          path: |
+            coverage.xml
+            htmlcov/
+            test-results.xml
+
+  # ==========================================================================
+  # Build
+  # ==========================================================================
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Build package
+        run: just build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ==========================================================================
+  # Security Scan 
+  # ==========================================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Setup environment
+        run: just setup
+
+      - name: Run security scan
+        run: just security
+        continue-on-error: true

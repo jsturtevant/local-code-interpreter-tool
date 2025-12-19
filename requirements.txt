@@ -1,0 +1,10 @@
+# Microsoft Agent Framework
+agent-framework
+
+# Common dependencies
+python-dotenv
+pydantic
+aiohttp
+
+# Azure identity for authentication (if using Azure OpenAI)
+azure-identity
