@@ -86,7 +86,7 @@ class TestCodeExecutionToolPython:
 
 
 class TestCodeExecutionToolHyperlight:
-    """Tests for CodeExecutionTool with hyperlight environment."""
+    """Tests for CodeExecutionTool with hyperlight environment (JavaScript)."""
 
     def test_hyperlight_available(self):
         """Verify hyperlight-nanvix module is installed."""
@@ -115,12 +115,12 @@ class TestCodeExecutionToolHyperlight:
     async def test_hyperlight_execute_returns_result(self):
         """Test that execute returns the expected output."""
         tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-        result = await tool._execute(code='print("hello")')
+        result = await tool._execute(code='console.log("hello")')
         assert "hello" in result
 
     @pytest.mark.asyncio
     async def test_hyperlight_execute_simple_code(self):
-        """Test that hyperlight executes Python and returns output."""
+        """Test that hyperlight executes JavaScript and returns output."""
         tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-        result = await tool._execute(code="print(2 + 2)")
+        result = await tool._execute(code="console.log(2 + 2)")
         assert "4" in result

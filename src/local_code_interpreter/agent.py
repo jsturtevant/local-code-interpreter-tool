@@ -103,16 +103,12 @@ class RetryOnRateLimitMiddleware(ChatMiddleware):
 # Agent Configuration
 # =============================================================================
 
-INTERPRETER_AGENT_INSTRUCTIONS = """You are a Local Code Interpreter Assistant, helping users execute and test code.
+INTERPRETER_AGENT_INSTRUCTIONS_PYTHON = """You are a Local Code Interpreter Assistant, helping users execute and test code.
 
 Your capabilities include:
-- Executing code in a sandboxed environment using the execute_code tool
+- Executing Python code in a sandboxed environment using the execute_code tool
 - Testing code snippets and algorithms
 - Running calculations and data processing
-
-The execute_code tool supports two environments:
-- 'python' (default): Fast subprocess execution for Python code
-- 'hyperlight': VM-isolated sandbox for untrusted code (supports JavaScript, Python, C, C++)
 
 IMPORTANT: The execute_code tool captures stdout/stderr output. To see results:
 - Always use print() to display values (e.g., print(2 + 2) not just 2 + 2)
@@ -125,7 +121,27 @@ When to use execute_code:
 - When the user asks you to run or execute code
 - When you need to process data or demonstrate functionality
 
-Use the 'language' parameter when running non-Python code in hyperlight mode.
+Always be clear and concise. When reporting issues, include actionable recommendations.
+If you need more information to help, ask clarifying questions.
+"""
+
+INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT = """You are a Local Code Interpreter Assistant, helping users execute and test code.
+
+Your capabilities include:
+- Executing JavaScript code in a secure VM-isolated sandbox using the execute_code tool
+- Testing code snippets and algorithms
+- Running calculations and data processing
+
+IMPORTANT: You are running in hyperlight mode which uses JavaScript. Always write JavaScript code, NOT Python.
+- Use console.log() to display values (e.g., console.log(2 + 2) not just 2 + 2)
+- For expressions, wrap them in console.log() to see the output
+- Without console.log(), calculations run silently with no visible result
+
+When to use execute_code:
+- When you need to perform calculations or verify mathematical results
+- When you need to test a code snippet or algorithm
+- When the user asks you to run or execute code
+- When you need to process data or demonstrate functionality
 
 Always be clear and concise. When reporting issues, include actionable recommendations.
 If you need more information to help, ask clarifying questions.
@@ -163,18 +179,26 @@ def create_interpreter_agent(
         ),
     ]
 
+    # Select instructions based on environment
+    instructions = (
+        INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT
+        if environment == "hyperlight"
+        else INTERPRETER_AGENT_INSTRUCTIONS_PYTHON
+    )
+
     backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
     if description is None:
+        lang = "JavaScript" if environment == "hyperlight" else "Python"
         description = (
             f"Local Code Interpreter using {backend}. "
-            f"Execute Python code in a sandboxed {environment} environment."
+            f"Execute {lang} code in a sandboxed {environment} environment."
         )
 
     return ChatAgent(
         name=name,
         description=description,
         chat_client=_create_chat_client(),
-        instructions=INTERPRETER_AGENT_INSTRUCTIONS,
+        instructions=instructions,
         tools=tools,
         middleware=[
             RetryOnRateLimitMiddleware(

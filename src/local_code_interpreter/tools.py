@@ -90,40 +90,44 @@ async def _run_hyperlight(
     sandbox: "NanvixSandbox",
     tmp_directory: str,
 ) -> str:
-    """Execute code in a hyperlight-nanvix VM sandbox.
-
-    The hyperlight runtime auto-detects the language from file content.
-    We use .py extension as default since the sandbox handles detection.
-    """
+    """Execute JavaScript code in a hyperlight-nanvix VM sandbox."""
     workload_dir = os.path.join(tmp_directory, "hyperlight-workloads")
     os.makedirs(workload_dir, exist_ok=True)
 
-    # Use .py extension - hyperlight runtime detects actual language from content
-    filename = f"workload_{uuid.uuid4().hex[:8]}.py"
+    filename = f"workload_{uuid.uuid4().hex[:8]}.js"
     workload_path = os.path.join(workload_dir, filename)
+    stdout_capture_path = os.path.join(tmp_directory, f"stdout_{uuid.uuid4().hex[:8]}.txt")
 
     try:
         with open(workload_path, "w") as f:
             f.write(code)
 
-        result: WorkloadResult = await sandbox.run(workload_path)
+        # Capture stdout at fd level since hyperlight writes directly to fd 1
+        original_stdout_fd = os.dup(1)
+        try:
+            with open(stdout_capture_path, "w") as capture_file:
+                os.dup2(capture_file.fileno(), 1)
+                sys.stdout.flush()
+                try:
+                    result: WorkloadResult = await sandbox.run(workload_path)
+                finally:
+                    sys.stdout.flush()
+                    os.dup2(original_stdout_fd, 1)
+
+            with open(stdout_capture_path, "r") as f:
+                captured_stdout = f.read().strip()
+        finally:
+            os.close(original_stdout_fd)
+            if os.path.exists(stdout_capture_path):
+                try:
+                    os.remove(stdout_capture_path)
+                except OSError:
+                    pass
 
         if result.success:
-            # Try to get actual output
-            output: str | None = None
-            if hasattr(result, "stdout") and result.stdout:
-                output = str(result.stdout)
-            elif hasattr(result, "output") and result.output:
-                output = str(result.output)
-
-            if output:
-                return output
-            else:
-                return "Execution completed successfully."
+            return captured_stdout if captured_stdout else "Execution completed successfully."
         else:
-            error_msg: str = str(
-                getattr(result, "error", None) or getattr(result, "stderr", None) or "Unknown error"
-            )
+            error_msg = result.error or "Unknown error"
             logger.error(f"Hyperlight execution failed: {error_msg}")
             return f"Execution failed: {error_msg}"
 
@@ -168,7 +172,7 @@ class CodeExecutionTool(AIFunction):
                 log_directory="/tmp/hyperlight-logs",
             )
 
-            # Hyperlight supports multiple languages (javascript, python, c, cpp)
+            # Hyperlight executes JavaScript in a VM sandbox
             code_tool = CodeExecutionTool(environment="hyperlight")
     """
 
@@ -208,8 +212,8 @@ class CodeExecutionTool(AIFunction):
 
         if environment == "hyperlight":
             description = (
-                "Execute code in a secure hyperlight-nanvix sandbox with VM-level "
-                "isolation. The runtime auto-detects the programming language."
+                "Execute JavaScript code in a secure hyperlight-nanvix sandbox "
+                "with VM-level isolation."
             )
         else:
             description = (
