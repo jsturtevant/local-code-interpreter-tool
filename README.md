@@ -6,6 +6,13 @@ A local code interpreter tool built with the [Microsoft Agent Framework](https:/
 
 This project uses [just](https://github.com/casey/just) as a task runner.
 
+### 0.5 (Optional) Deploy Azure OpenAI:
+Skip if using OpenAI directly or you already have an Azure OpenAI endpoint. Requires az cli and for you to be logged in.
+```bash
+just azure-foundry-deploy
+just azure-foundry-grant-access
+```
+
 ### 1. Setup (creates venv and installs dependencies):
 ```bash
 just setup
@@ -54,16 +61,7 @@ just interactive --hyperlight # Interactive mode with hyperlight
 
 #### Building Hyperlight
 
-```bash
-# Clone the hyperlight-nanvix repository
-git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git
-cd hyperlight-nanvix
-git checkout danbugs/python-host-sdk
-
-# Build and install into your venv (requires Rust and maturin)
-pip install maturin
-maturin develop --features python
-```
+Hyperlight is automatically built and installed when you run `just setup`. This requires Rust and maturin to be installed on your system.
 
 ## Configuration
 

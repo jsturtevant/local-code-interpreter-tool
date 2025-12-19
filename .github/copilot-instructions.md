@@ -91,13 +91,6 @@ The agent auto-detects which backend to use based on environment variables:
 - Tool return values should be human-readable strings
 - Azure agent uses `AzureCliCredential()` - no API keys stored
 
-## Git Worktrees
-
-This project uses Git worktrees. The `main/` directory is the main worktree:
-```bash
-git worktree add -b feature-name ../local-code-interpreter-tool/feature-name
-git worktree list
-```
 
 ## Agents
 
