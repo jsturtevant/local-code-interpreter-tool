@@ -48,7 +48,7 @@ install-nanvix:
         cd vendor/hyperlight-nanvix && git pull; \
     fi
     {{venv}} pip install maturin
-    cd vendor/hyperlight-nanvix && {{venv}} maturin develop --features python
+    {{venv}} maturin develop --manifest-path vendor/hyperlight-nanvix/Cargo.toml --features python
     @echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
