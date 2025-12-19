@@ -1,5 +1,6 @@
 # Microsoft Agent Framework
 agent-framework
+agent-framework-devui
 
 # Common dependencies
 python-dotenv

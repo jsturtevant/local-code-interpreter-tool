@@ -53,6 +53,11 @@ interactive *args:
     @{{check-venv}}
     {{venv}} python -m local_code_interpreter.agent --interactive {{args}}
 
+# Launch the DevUI web interface for testing
+devui *args:
+    @{{check-venv}}
+    {{venv}} python -m local_code_interpreter.agent --devui {{args}}
+
 # =============================================================================
 # Code Quality
 # =============================================================================

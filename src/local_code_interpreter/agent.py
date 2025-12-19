@@ -114,6 +114,11 @@ The execute_code tool supports two environments:
 - 'python' (default): Fast subprocess execution for Python code
 - 'hyperlight': VM-isolated sandbox for untrusted code (supports JavaScript, Python, C, C++)
 
+IMPORTANT: The execute_code tool captures stdout/stderr output. To see results:
+- Always use print() to display values (e.g., print(2 + 2) not just 2 + 2)
+- For expressions, wrap them in print() to see the output
+- Without print(), calculations run silently with no visible result
+
 When to use execute_code:
 - When you need to perform calculations or verify mathematical results
 - When you need to test a code snippet or algorithm
@@ -130,6 +135,8 @@ If you need more information to help, ask clarifying questions.
 def create_interpreter_agent(
     environment: str = "python",
     timeout: int = 30,
+    name: str = "code-interpreter",
+    description: str | None = None,
 ) -> ChatAgent:
     """Create and configure the local code interpreter agent.
 
@@ -139,6 +146,8 @@ def create_interpreter_agent(
     Args:
         environment: Execution environment - 'python' or 'hyperlight'.
         timeout: Execution timeout in seconds (for python environment).
+        name: Agent name (used by DevUI).
+        description: Agent description (used by DevUI).
     """
     if environment == "hyperlight" and not HYPERLIGHT_AVAILABLE:
         import warnings
@@ -154,7 +163,16 @@ def create_interpreter_agent(
         ),
     ]
 
+    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    if description is None:
+        description = (
+            f"Local Code Interpreter using {backend}. "
+            f"Execute Python code in a sandboxed {environment} environment."
+        )
+
     return ChatAgent(
+        name=name,
+        description=description,
         chat_client=_create_chat_client(),
         instructions=INTERPRETER_AGENT_INSTRUCTIONS,
         tools=tools,
@@ -291,6 +309,34 @@ def _configure_logging(verbose: bool = False) -> None:
     logging.getLogger("azure").setLevel(logging.WARNING)
 
 
+def run_devui(
+    environment: str = "python",
+    port: int = 8090,
+    auto_open: bool = True,
+) -> None:
+    """Launch the DevUI web interface for testing the agent.
+
+    Args:
+        environment: Execution environment - 'python' or 'hyperlight'.
+        port: Port to run the DevUI server on.
+        auto_open: Whether to automatically open the browser.
+    """
+    from agent_framework.devui import serve
+
+    agent = create_interpreter_agent(environment=environment)
+
+    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    logger.info("=" * 60)
+    logger.info("Local Code Interpreter - DevUI")
+    logger.info("=" * 60)
+    logger.info(f"Backend: {backend}")
+    logger.info(f"Environment: {environment}")
+    logger.info(f"Server: http://localhost:{port}")
+    logger.info("=" * 60)
+
+    serve(entities=[agent], port=port, auto_open=auto_open)
+
+
 async def main() -> None:
     """Main entry point."""
     import sys
@@ -309,4 +355,18 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+
+    # Handle --devui before entering async context (serve() runs its own event loop)
+    if "--devui" in sys.argv:
+        verbose = "--verbose" in sys.argv or "-v" in sys.argv
+        environment = "hyperlight" if "--hyperlight" in sys.argv else "python"
+        port = 8090
+        auto_open = "--no-browser" not in sys.argv
+        for arg in sys.argv:
+            if arg.startswith("--port="):
+                port = int(arg.split("=")[1])
+        _configure_logging(verbose=verbose)
+        run_devui(environment=environment, port=port, auto_open=auto_open)
+    else:
+        asyncio.run(main())

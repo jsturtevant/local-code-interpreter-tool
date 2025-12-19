@@ -54,6 +54,8 @@ async def _run_python(code: str, timeout: int) -> str:
     Returns:
         The combined stdout and stderr output, truncated if necessary.
     """
+    logger.debug(f"Executing Python code:\n{code}")
+
     # Use sys.executable to get the absolute path to the Python interpreter
     # This avoids needing PATH in the environment
     proc = await asyncio.create_subprocess_exec(
@@ -66,7 +68,11 @@ async def _run_python(code: str, timeout: int) -> str:
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        output = (stdout + stderr).decode()
+        stdout_str = stdout.decode()
+        stderr_str = stderr.decode()
+        logger.debug(f"stdout: {stdout_str!r}")
+        logger.debug(f"stderr: {stderr_str!r}")
+        output = stdout_str + stderr_str
         if len(output) > MAX_OUTPUT_SIZE:
             return output[:MAX_OUTPUT_SIZE] + "\n... [output truncated]"
         return output
@@ -261,16 +267,29 @@ class CodeExecutionTool(AIFunction):
         Returns:
             The execution output or result message.
         """
-        if self.environment == "hyperlight":
-            sandbox = self._get_sandbox()
-            return await _run_hyperlight(code, language, sandbox, self.tmp_directory)
-        else:
-            if language.lower() not in ("python", "py"):
-                return (
-                    f"Error: Python environment only supports Python code. "
-                    f"Use environment='hyperlight' for {language} support."
-                )
-            return await _run_python(code, self.timeout)
+        logger.debug(f"_execute called with language={language!r}, code={code!r}")
+
+        try:
+            if self.environment == "hyperlight":
+                sandbox = self._get_sandbox()
+                result = await _run_hyperlight(code, language, sandbox, self.tmp_directory)
+            else:
+                if language.lower() not in ("python", "py"):
+                    return (
+                        f"Error: Python environment only supports Python code. "
+                        f"Use environment='hyperlight' for {language} support."
+                    )
+                result = await _run_python(code, self.timeout)
+
+            # Ensure we always return a non-empty string
+            if not result:
+                result = "(No output)"
+            logger.debug(f"_execute returning: {result!r}")
+            return result
+        except Exception as e:
+            error_msg = f"Error executing code: {e}"
+            logger.exception(error_msg)
+            return error_msg
 
     async def clear_cache(self) -> str:
         """Clear the hyperlight sandbox binary cache."""

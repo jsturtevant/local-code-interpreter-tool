@@ -21,6 +21,7 @@ cp .env.example .env
 ```bash
 just run              # Run the agent in demo mode
 just interactive      # Interactive chat mode
+just devui            # Launch DevUI web interface
 ```
 
 ### Available Commands
@@ -80,6 +81,22 @@ AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
 AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="your-deployment"
 ```
 Then authenticate with `az login` before running.
+
+## DevUI Web Interface
+
+The project includes a web-based interface for testing and debugging using [Agent Framework DevUI](https://github.com/microsoft/agent-framework/tree/main/python/packages/devui):
+
+```bash
+just devui                     # Launch DevUI on http://localhost:8090
+just devui --port=8080         # Custom port
+just devui --hyperlight        # Use hyperlight environment
+just devui --no-browser        # Don't auto-open browser
+```
+
+DevUI provides:
+- A web interface for testing the code interpreter agent
+- OpenAI-compatible API endpoints
+- Real-time conversation debugging
 
 ## Learn More
 
