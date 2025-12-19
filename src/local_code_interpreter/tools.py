@@ -87,29 +87,19 @@ async def _run_python(code: str, timeout: int) -> str:
 
 async def _run_hyperlight(
     code: str,
-    language: str,
     sandbox: "NanvixSandbox",
     tmp_directory: str,
 ) -> str:
-    """Execute code in a hyperlight-nanvix VM sandbox."""
-    ext_map = {
-        "javascript": ".js",
-        "js": ".js",
-        "python": ".py",
-        "py": ".py",
-        "c": ".c",
-        "cpp": ".cpp",
-        "c++": ".cpp",
-    }
+    """Execute code in a hyperlight-nanvix VM sandbox.
 
-    ext = ext_map.get(language.lower())
-    if ext is None:
-        return f"Error: Unsupported language '{language}'. Supported: javascript, python, c, cpp"
-
+    The hyperlight runtime auto-detects the language from file content.
+    We use .py extension as default since the sandbox handles detection.
+    """
     workload_dir = os.path.join(tmp_directory, "hyperlight-workloads")
     os.makedirs(workload_dir, exist_ok=True)
 
-    filename = f"workload_{uuid.uuid4().hex[:8]}{ext}"
+    # Use .py extension - hyperlight runtime detects actual language from content
+    filename = f"workload_{uuid.uuid4().hex[:8]}.py"
     workload_path = os.path.join(workload_dir, filename)
 
     try:
@@ -219,8 +209,7 @@ class CodeExecutionTool(AIFunction):
         if environment == "hyperlight":
             description = (
                 "Execute code in a secure hyperlight-nanvix sandbox with VM-level "
-                "isolation. Supports JavaScript, Python, C, and C++ workloads. "
-                "Specify the 'language' parameter for non-Python code."
+                "isolation. The runtime auto-detects the programming language."
             )
         else:
             description = (
@@ -253,32 +242,22 @@ class CodeExecutionTool(AIFunction):
     async def _execute(
         self,
         code: Annotated[str, Field(description="The code to execute")],
-        language: Annotated[
-            str,
-            Field(description="Programming language: 'python', 'javascript', 'c', or 'cpp'"),
-        ] = "python",
     ) -> str:
         """Execute the provided code.
 
         Args:
             code: The source code to execute.
-            language: Programming language (hyperlight supports js/python/c/cpp).
 
         Returns:
             The execution output or result message.
         """
-        logger.debug(f"_execute called with language={language!r}, code={code!r}")
+        logger.debug(f"_execute called with code={code!r}")
 
         try:
             if self.environment == "hyperlight":
                 sandbox = self._get_sandbox()
-                result = await _run_hyperlight(code, language, sandbox, self.tmp_directory)
+                result = await _run_hyperlight(code, sandbox, self.tmp_directory)
             else:
-                if language.lower() not in ("python", "py"):
-                    return (
-                        f"Error: Python environment only supports Python code. "
-                        f"Use environment='hyperlight' for {language} support."
-                    )
                 result = await _run_python(code, self.timeout)
 
             # Ensure we always return a non-empty string

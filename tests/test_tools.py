@@ -84,13 +84,6 @@ class TestCodeExecutionToolPython:
         result = await tool._execute(code="import time; time.sleep(10)")
         assert "timed out" in result.lower()
 
-    @pytest.mark.asyncio
-    async def test_python_env_rejects_non_python(self):
-        tool = CodeExecutionTool(approval_mode="never_require")
-        result = await tool._execute(code="console.log('hi')", language="javascript")
-        assert "error" in result.lower()
-        assert "hyperlight" in result.lower()
-
 
 class TestCodeExecutionToolHyperlight:
     """Tests for CodeExecutionTool with hyperlight environment."""
@@ -119,28 +112,15 @@ class TestCodeExecutionToolHyperlight:
         assert "sandbox" in tool.description.lower() or "hyperlight" in tool.description.lower()
 
     @pytest.mark.asyncio
-    async def test_hyperlight_rejects_unsupported_language(self):
-        tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-        result = await tool._execute(code="puts 'hello'", language="ruby")
-        assert "unsupported" in result.lower() or "error" in result.lower()
-
-    @pytest.mark.asyncio
     async def test_hyperlight_execute_returns_result(self):
         """Test that execute returns the expected output."""
         tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-        result = await tool._execute(
-            code='console.log("hello");',
-            language="javascript",
-        )
-        assert isinstance(result, str)
+        result = await tool._execute(code='print("hello")')
         assert "hello" in result
 
     @pytest.mark.asyncio
     async def test_hyperlight_execute_simple_code(self):
-        """Test that hyperlight executes JavaScript and returns output."""
+        """Test that hyperlight executes Python and returns output."""
         tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-        result = await tool._execute(
-            code="console.log(2 + 2);",
-            language="javascript",
-        )
+        result = await tool._execute(code="print(2 + 2)")
         assert "4" in result
