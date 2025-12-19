@@ -27,6 +27,43 @@ just interactive      # Interactive chat mode
 
 Run `just` to see all available commands
 
+## Execution Environments
+
+The code execution tool supports two environments:
+
+### Python (default)
+Fast subprocess execution for Python code with timeout and sandboxing.
+
+```bash
+just run              # Uses python environment
+just interactive      # Interactive mode with python
+```
+
+### Hyperlight
+VM-isolated sandbox using [hyperlight-nanvix](https://github.com/hyperlight-dev/hyperlight-nanvix) for untrusted code execution. Supports JavaScript, Python, C, and C++.
+
+```bash
+just run --hyperlight         # Demo mode with hyperlight
+just interactive --hyperlight # Interactive mode with hyperlight
+```
+
+**Note:** Hyperlight requires:
+- Linux with KVM support (`/dev/kvm` access)
+- hyperlight-nanvix Python bindings installed (see [Building Hyperlight](#building-hyperlight))
+
+#### Building Hyperlight
+
+```bash
+# Clone the hyperlight-nanvix repository
+git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git
+cd hyperlight-nanvix
+git checkout danbugs/python-host-sdk
+
+# Build and install into your venv (requires Rust and maturin)
+pip install maturin
+maturin develop --features python
+```
+
 ## Configuration
 
 ### Option 1: OpenAI (api.openai.com)

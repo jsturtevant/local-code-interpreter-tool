@@ -44,14 +44,14 @@ update:
 # =============================================================================
 
 # Run the full agent
-run:
+run *args:
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter.agent
+    {{venv}} python -m local_code_interpreter.agent {{args}}
 
 # Run in interactive chat mode
-interactive:
+interactive *args:
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter.agent --interactive
+    {{venv}} python -m local_code_interpreter.agent --interactive {{args}}
 
 # =============================================================================
 # Code Quality

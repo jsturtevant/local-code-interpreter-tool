@@ -4,6 +4,7 @@ import pytest
 
 from local_code_interpreter.tools import (
     CodeExecutionTool,
+    HYPERLIGHT_AVAILABLE,
     _run_python,
 )
 
@@ -44,18 +45,18 @@ class TestRunPython:
 
     @pytest.mark.asyncio
     async def test_truncates_large_output(self):
-        # Generate output larger than 10KB
         result = await _run_python("print('x' * 20000)", timeout=5)
         assert len(result) <= 10100  # 10KB + truncation message
         assert "truncated" in result.lower()
 
 
-class TestCodeExecutionTool:
-    """Tests for CodeExecutionTool class."""
+class TestCodeExecutionToolPython:
+    """Tests for CodeExecutionTool with python environment."""
 
     def test_creates_with_default_settings(self):
         tool = CodeExecutionTool()
         assert tool.name == "execute_code"
+        assert tool.environment == "python"
         assert tool.timeout == 30
         assert tool.approval_mode == "always_require"
 
@@ -70,7 +71,6 @@ class TestCodeExecutionTool:
     def test_has_description(self):
         tool = CodeExecutionTool()
         assert "Python" in tool.description
-        assert "isolated" in tool.description
 
     @pytest.mark.asyncio
     async def test_execute_simple_code(self):
@@ -83,3 +83,64 @@ class TestCodeExecutionTool:
         tool = CodeExecutionTool(timeout=1, approval_mode="never_require")
         result = await tool._execute(code="import time; time.sleep(10)")
         assert "timed out" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_python_env_rejects_non_python(self):
+        tool = CodeExecutionTool(approval_mode="never_require")
+        result = await tool._execute(code="console.log('hi')", language="javascript")
+        assert "error" in result.lower()
+        assert "hyperlight" in result.lower()
+
+
+class TestCodeExecutionToolHyperlight:
+    """Tests for CodeExecutionTool with hyperlight environment."""
+
+    def test_hyperlight_available(self):
+        """Verify hyperlight-nanvix module is installed."""
+        assert HYPERLIGHT_AVAILABLE is True
+
+    def test_creates_with_hyperlight_environment(self):
+        tool = CodeExecutionTool(environment="hyperlight")
+        assert tool.name == "execute_code"
+        assert tool.environment == "hyperlight"
+        assert tool.approval_mode == "always_require"
+
+    def test_creates_with_custom_directories(self):
+        tool = CodeExecutionTool(
+            environment="hyperlight",
+            log_directory="/tmp/hyperlight-logs",
+            tmp_directory="/tmp/hyperlight-tmp",
+        )
+        assert tool.log_directory == "/tmp/hyperlight-logs"
+        assert tool.tmp_directory == "/tmp/hyperlight-tmp"
+
+    def test_has_hyperlight_description(self):
+        tool = CodeExecutionTool(environment="hyperlight")
+        assert "sandbox" in tool.description.lower() or "hyperlight" in tool.description.lower()
+
+    @pytest.mark.asyncio
+    async def test_hyperlight_rejects_unsupported_language(self):
+        tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
+        result = await tool._execute(code="puts 'hello'", language="ruby")
+        assert "unsupported" in result.lower() or "error" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_hyperlight_execute_returns_result(self):
+        """Test that execute returns the expected output."""
+        tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
+        result = await tool._execute(
+            code='console.log("hello");',
+            language="javascript",
+        )
+        assert isinstance(result, str)
+        assert "hello" in result
+
+    @pytest.mark.asyncio
+    async def test_hyperlight_execute_simple_code(self):
+        """Test that hyperlight executes JavaScript and returns output."""
+        tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
+        result = await tool._execute(
+            code="console.log(2 + 2);",
+            language="javascript",
+        )
+        assert "4" in result
