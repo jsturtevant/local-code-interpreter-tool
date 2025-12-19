@@ -7,60 +7,118 @@ Shared tool functions for code interpreter agents.
 These can be used with any agent configuration (OpenAI, Azure OpenAI, etc.)
 """
 
-from datetime import datetime, timezone
-from typing import Annotated
+import asyncio
+import sys
+from typing import Annotated, Literal
 
+from agent_framework import AIFunction
 from pydantic import Field
 
 
-def get_release_status(
-    release_id: Annotated[str, Field(description="The release identifier (e.g., v1.2.3 or release-123)")],
-) -> str:
-    """Get the current status of a release."""
-    # In a real implementation, this would query your release management system
-    return f"Release {release_id}: Status is 'In Progress'. 3/5 stages completed. Last updated: {datetime.now(timezone.utc).isoformat()}"
+# =============================================================================
+# Code Execution Backend
+# =============================================================================
+
+MAX_OUTPUT_SIZE = 10000  # 10KB truncation limit
 
 
-def list_pending_approvals() -> str:
-    """List all pending release approvals."""
-    # In a real implementation, this would query your approval system
-    approvals = [
-        {"release": "v2.1.0", "stage": "Production", "requester": "team-backend", "waiting_since": "2 hours"},
-        {"release": "v1.9.5-hotfix", "stage": "Staging", "requester": "team-frontend", "waiting_since": "30 minutes"},
-    ]
-    if not approvals:
-        return "No pending approvals found."
-    
-    result = "Pending Approvals:\n"
-    for a in approvals:
-        result += f"  - {a['release']} → {a['stage']} (requested by {a['requester']}, waiting {a['waiting_since']})\n"
-    return result
+async def _run_python(code: str, timeout: int) -> str:
+    """Execute Python code in a sandboxed subprocess.
+
+    Args:
+        code: Python code to execute.
+        timeout: Execution timeout in seconds.
+
+    Returns:
+        The combined stdout and stderr output, truncated if necessary.
+    """
+    # Use sys.executable to get the absolute path to the Python interpreter
+    # This avoids needing PATH in the environment
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        code,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={},  # Stripped environment for security
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        output = (stdout + stderr).decode()
+        if len(output) > MAX_OUTPUT_SIZE:
+            return output[:MAX_OUTPUT_SIZE] + "\n... [output truncated]"
+        return output
+    except asyncio.TimeoutError:
+        proc.kill()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            pass  # Process is truly stuck
+        return f"Error: Execution timed out after {timeout}s"
 
 
-def get_deployment_logs(
-    environment: Annotated[str, Field(description="The target environment (e.g., staging, production)")],
-    limit: Annotated[int, Field(description="Maximum number of log entries to retrieve")] = 10,
-) -> str:
-    """Get recent deployment logs for an environment."""
-    # In a real implementation, this would fetch actual logs
-    logs = [
-        f"[{datetime.now(timezone.utc).isoformat()}] Deployment started for environment: {environment}",
-        f"[{datetime.now(timezone.utc).isoformat()}] Health checks passed",
-        f"[{datetime.now(timezone.utc).isoformat()}] Traffic shifted: 25%",
-        f"[{datetime.now(timezone.utc).isoformat()}] Monitoring metrics within thresholds",
-    ]
-    return f"Recent logs for {environment} (last {min(limit, len(logs))} entries):\n" + "\n".join(logs[:limit])
+class CodeExecutionTool(AIFunction):
+    """A tool for executing Python code in a sandboxed environment.
 
+    This tool runs Python code in an isolated subprocess with:
+    - Stripped environment variables (no access to secrets)
+    - Configurable timeout protection
+    - Output truncation for large responses
 
-def trigger_rollback(
-    release_id: Annotated[str, Field(description="The release identifier to rollback")],
-    reason: Annotated[str, Field(description="Reason for the rollback")],
-) -> str:
-    """Trigger a rollback for a specific release."""
-    # In a real implementation, this would initiate a rollback process
-    return f"Rollback initiated for {release_id}. Reason: {reason}. Estimated time: 5 minutes. Rollback ID: RB-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    Examples:
+        .. code-block:: python
 
+            from local_code_interpreter.tools import CodeExecutionTool
 
-def get_current_time() -> str:
-    """Get the current UTC time."""
-    return f"Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
+            # Create with default settings (30s timeout, requires approval)
+            code_tool = CodeExecutionTool()
+
+            # Create with custom timeout
+            code_tool = CodeExecutionTool(timeout=60)
+
+            # Create without approval requirement (use with caution!)
+            code_tool = CodeExecutionTool(approval_mode="never_require")
+    """
+
+    def __init__(
+        self,
+        *,
+        timeout: int = 30,
+        approval_mode: Literal["always_require", "never_require"] = "always_require",
+        **kwargs,
+    ) -> None:
+        """Initialize the CodeExecutionTool.
+
+        Keyword Args:
+            timeout: Execution timeout in seconds. Defaults to 30.
+            approval_mode: Whether approval is required before execution.
+                Defaults to "always_require" for safety.
+        """
+        self.timeout = timeout
+
+        super().__init__(
+            name="execute_code",
+            description=(
+                "Execute Python code in an isolated subprocess and return the output. "
+                "Use this tool when you need to run calculations, test code snippets, "
+                "or verify logic. The code runs with no environment variables but has "
+                "filesystem access. Use for trusted operations only."
+            ),
+            approval_mode=approval_mode,
+            func=self._execute,
+            **kwargs,
+        )
+
+    async def _execute(
+        self,
+        code: Annotated[str, Field(description="Python code to execute")],
+    ) -> str:
+        """Execute the provided Python code.
+
+        Args:
+            code: Python code to execute.
+
+        Returns:
+            The execution output (stdout + stderr).
+        """
+        return await _run_python(code, self.timeout)

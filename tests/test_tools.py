@@ -1,81 +1,85 @@
 """Tests for Local Code Interpreter Tools"""
 
+import pytest
+
 from local_code_interpreter.tools import (
-    get_release_status,
-    list_pending_approvals,
-    get_deployment_logs,
-    trigger_rollback,
-    get_current_time,
+    CodeExecutionTool,
+    _run_python,
 )
 
 
-class TestGetReleaseStatus:
-    """Tests for get_release_status tool."""
+class TestRunPython:
+    """Tests for _run_python backend function."""
 
-    def test_returns_status_with_release_id(self):
-        result = get_release_status("v1.2.3")
-        assert "v1.2.3" in result
-        assert "Status" in result
+    @pytest.mark.asyncio
+    async def test_executes_simple_code(self):
+        result = await _run_python("print('hello world')", timeout=5)
+        assert "hello world" in result
 
-    def test_includes_progress_info(self):
-        result = get_release_status("release-123")
-        assert "stages completed" in result
+    @pytest.mark.asyncio
+    async def test_captures_stdout(self):
+        result = await _run_python("print('stdout test')", timeout=5)
+        assert "stdout test" in result
 
+    @pytest.mark.asyncio
+    async def test_captures_stderr(self):
+        result = await _run_python("import sys; sys.stderr.write('stderr test')", timeout=5)
+        assert "stderr test" in result
 
-class TestListPendingApprovals:
-    """Tests for list_pending_approvals tool."""
+    @pytest.mark.asyncio
+    async def test_timeout_kills_process(self):
+        result = await _run_python("import time; time.sleep(10)", timeout=1)
+        assert "timed out" in result.lower()
+        assert "1s" in result
 
-    def test_returns_pending_approvals(self):
-        result = list_pending_approvals()
-        assert "Pending Approvals" in result
+    @pytest.mark.asyncio
+    async def test_handles_syntax_error(self):
+        result = await _run_python("this is not valid python!", timeout=5)
+        assert "SyntaxError" in result or "Error" in result
 
-    def test_includes_approval_details(self):
-        result = list_pending_approvals()
-        assert "Production" in result or "Staging" in result
+    @pytest.mark.asyncio
+    async def test_handles_runtime_error(self):
+        result = await _run_python("raise ValueError('test error')", timeout=5)
+        assert "ValueError" in result or "test error" in result
 
-
-class TestGetDeploymentLogs:
-    """Tests for get_deployment_logs tool."""
-
-    def test_returns_logs_for_environment(self):
-        result = get_deployment_logs("staging")
-        assert "staging" in result
-        assert "logs" in result.lower()
-
-    def test_respects_limit_parameter(self):
-        result = get_deployment_logs("production", limit=2)
-        assert "production" in result
-
-    def test_default_limit(self):
-        result = get_deployment_logs("staging")
-        assert "10" in result or "4" in result  # Default or actual count
-
-
-class TestTriggerRollback:
-    """Tests for trigger_rollback tool."""
-
-    def test_initiates_rollback(self):
-        result = trigger_rollback("v1.0.0", "Critical bug found")
-        assert "Rollback initiated" in result
-        assert "v1.0.0" in result
-
-    def test_includes_reason(self):
-        result = trigger_rollback("v2.0.0", "Performance degradation")
-        assert "Performance degradation" in result
-
-    def test_returns_rollback_id(self):
-        result = trigger_rollback("v1.0.0", "Test")
-        assert "RB-" in result
+    @pytest.mark.asyncio
+    async def test_truncates_large_output(self):
+        # Generate output larger than 10KB
+        result = await _run_python("print('x' * 20000)", timeout=5)
+        assert len(result) <= 10100  # 10KB + truncation message
+        assert "truncated" in result.lower()
 
 
-class TestGetCurrentTime:
-    """Tests for get_current_time tool."""
+class TestCodeExecutionTool:
+    """Tests for CodeExecutionTool class."""
 
-    def test_returns_utc_time(self):
-        result = get_current_time()
-        assert "UTC" in result
+    def test_creates_with_default_settings(self):
+        tool = CodeExecutionTool()
+        assert tool.name == "execute_code"
+        assert tool.timeout == 30
+        assert tool.approval_mode == "always_require"
 
-    def test_includes_timestamp(self):
-        result = get_current_time()
-        # Should contain a date-like pattern
-        assert "-" in result and ":" in result
+    def test_creates_with_custom_timeout(self):
+        tool = CodeExecutionTool(timeout=60)
+        assert tool.timeout == 60
+
+    def test_creates_with_never_require_approval(self):
+        tool = CodeExecutionTool(approval_mode="never_require")
+        assert tool.approval_mode == "never_require"
+
+    def test_has_description(self):
+        tool = CodeExecutionTool()
+        assert "Python" in tool.description
+        assert "isolated" in tool.description
+
+    @pytest.mark.asyncio
+    async def test_execute_simple_code(self):
+        tool = CodeExecutionTool(timeout=5, approval_mode="never_require")
+        result = await tool._execute(code="print(2 + 2)")
+        assert "4" in result
+
+    @pytest.mark.asyncio
+    async def test_execute_respects_timeout(self):
+        tool = CodeExecutionTool(timeout=1, approval_mode="never_require")
+        result = await tool._execute(code="import time; time.sleep(10)")
+        assert "timed out" in result.lower()

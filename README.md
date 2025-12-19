@@ -19,7 +19,7 @@ cp .env.example .env
 
 ### 3. Run the agent:
 ```bash
-just run              # Run the agent
+just run              # Run the agent in demo mode
 just interactive      # Interactive chat mode
 ```
 

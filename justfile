@@ -130,7 +130,7 @@ security:
     @{{check-venv}}
     {{venv}} pip install bandit safety
     {{venv}} bandit -r src/ -ll --skip B101
-    {{venv}} safety check -r requirements.txt
+    {{venv}} safety scan --target requirements.txt
 
 # =============================================================================
 # Azure Infrastructure
@@ -197,4 +197,54 @@ azure-foundry-purge-deleted name loc="eastus" rg="local-code-interpreter-rg":
       --location "{{loc}}" \
       -g "{{rg}}"
     echo "✅ Account purged successfully!"
+
+# List Azure OpenAI deployments and rate limits
+azure-foundry-deployments rg="local-code-interpreter-rg":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    foundryName=$(az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv)
+    if [ -z "$foundryName" ]; then \
+      echo "❌ No AI Services account found in resource group {{rg}}"; \
+      exit 1; \
+    fi
+    echo "📊 Deployments for $foundryName in {{rg}}:"
+    echo ""
+    az cognitiveservices account deployment list \
+      --name "$foundryName" \
+      --resource-group "{{rg}}" \
+      --query "[].{Name:name, Model:properties.model.name, Version:properties.model.version, TPM:properties.rateLimits[?key=='token'].count|[0], RPM:properties.rateLimits[?key=='request'].count|[0]}" \
+      -o table
+    echo ""
+    echo "💡 To increase TPM, run: just azure-foundry-set-capacity <deployment> <tpm> {{rg}}"
+
+# Update deployment capacity (TPM in thousands, e.g. 30 = 30K TPM)
+azure-foundry-set-capacity deployment tpm rg="local-code-interpreter-rg":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    foundryName=$(az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv)
+    if [ -z "$foundryName" ]; then \
+      echo "❌ No AI Services account found in resource group {{rg}}"; \
+      exit 1; \
+    fi
+    # Get current deployment details
+    deployment=$(az cognitiveservices account deployment show \
+      --name "$foundryName" \
+      --resource-group "{{rg}}" \
+      --deployment-name "{{deployment}}" \
+      -o json)
+    modelName=$(echo "$deployment" | jq -r '.properties.model.name')
+    modelVersion=$(echo "$deployment" | jq -r '.properties.model.version')
+    modelFormat=$(echo "$deployment" | jq -r '.properties.model.format')
+    skuName=$(echo "$deployment" | jq -r '.sku.name')
+    echo "🔧 Updating {{deployment}} capacity to {{tpm}}K TPM..."
+    az cognitiveservices account deployment create \
+      --name "$foundryName" \
+      --resource-group "{{rg}}" \
+      --deployment-name "{{deployment}}" \
+      --model-name "$modelName" \
+      --model-version "$modelVersion" \
+      --model-format "$modelFormat" \
+      --sku-name "$skuName" \
+      --sku-capacity "{{tpm}}"
+    echo "✅ Capacity updated! Run 'just azure-foundry-deployments {{rg}}' to verify."
 

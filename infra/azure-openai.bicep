@@ -13,8 +13,8 @@ param modelName string
 @description('Logical deployment name for the model (used by API calls)')
 param deploymentName string = modelName
 
-@description('Desired capacity (PTUs for provisioned, or TPM in thousands for standard)')
-param capacity int = 1
+@description('Desired capacity in thousands of tokens per minute (e.g., 30 = 30K TPM)')
+param capacity int = 30
 
 @description('Model format/provider (OpenAI, Anthropic, etc.)')
 param modelFormat string = 'OpenAI'
