@@ -39,12 +39,12 @@ install-dev:
 install-nanvix:
     @{{check-venv}}
     @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
+    @if ! command -v rustup &> /dev/null && ! test -f "$HOME/.cargo/bin/rustup"; then \
         echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
         exit 1; \
     fi
     @echo "🔧 Installing Rust nightly toolchain..."
-    rustup install nightly
+    @export PATH="$HOME/.cargo/bin:$PATH" && rustup install nightly
     @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
         echo "📥 Cloning hyperlight-nanvix..."; \
         mkdir -p vendor; \
@@ -54,7 +54,7 @@ install-nanvix:
         cd vendor/hyperlight-nanvix && git pull; \
     fi
     {{venv}} pip install maturin
-    cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
+    cd vendor/hyperlight-nanvix && export PATH="$HOME/.cargo/bin:$PATH" && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
     @echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
