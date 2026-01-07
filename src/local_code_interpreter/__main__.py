@@ -14,11 +14,14 @@ if __name__ == "__main__":
         verbose = "--verbose" in sys.argv or "-v" in sys.argv
         environment = "hyperlight" if "--hyperlight" in sys.argv else "python"
         port = 8090
+        host = "127.0.0.1"
         auto_open = "--no-browser" not in sys.argv
         for arg in sys.argv:
             if arg.startswith("--port="):
                 port = int(arg.split("=")[1])
+            if arg.startswith("--host="):
+                host = arg.split("=")[1]
         _configure_logging(verbose=verbose)
-        run_devui(environment=environment, port=port, auto_open=auto_open)
+        run_devui(environment=environment, port=port, host=host, auto_open=auto_open)
     else:
         asyncio.run(main())

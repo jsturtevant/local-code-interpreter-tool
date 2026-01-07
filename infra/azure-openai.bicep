@@ -41,8 +41,8 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
     allowProjectManagement: true
     // Defines developer API endpoint subdomain
     customSubDomainName: '${baseName}-foundry'
-    // Disable local auth (use Azure AD only)
-    disableLocalAuth: true
+    // Enable local auth (API keys) for development
+    disableLocalAuth: false
   }
   tags: tags
 }

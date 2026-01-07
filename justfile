@@ -129,6 +129,27 @@ test-ci:
     {{venv}} pytest tests/ -v --cov=src/local_code_interpreter --cov-report=xml --cov-report=html --junitxml=test-results.xml
 
 # =============================================================================
+# Docker
+# =============================================================================
+
+# Docker image configuration
+IMAGE_REGISTRY := env_var_or_default("IMAGE_REGISTRY", "hyperlightacrjs")
+IMAGE_NAME := "local-code-interpreter"
+IMAGE_TAG := env_var_or_default("IMAGE_TAG", "latest")
+IMAGE := IMAGE_REGISTRY + "/" + IMAGE_NAME + ":" + IMAGE_TAG
+
+# Build Docker image
+docker-build:
+    docker build -t {{IMAGE}} .
+
+# Run Docker container locally (uses env vars from .env for Azure auth)
+docker-run:
+    docker run --rm -p 8090:8090 --env-file .env {{IMAGE}}
+
+# Build and run Docker container
+docker-up: docker-build docker-run
+
+# =============================================================================
 # Build & Package
 # =============================================================================
 

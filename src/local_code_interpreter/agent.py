@@ -44,9 +44,14 @@ def _create_chat_client():
     """Create the appropriate chat client based on environment configuration."""
     if _is_azure_configured():
         from agent_framework.azure import AzureOpenAIResponsesClient
-        from azure.identity import AzureCliCredential
-
-        return AzureOpenAIResponsesClient(credential=AzureCliCredential())
+        
+        # Check for API key first (local dev), then fall back to DefaultAzureCredential (Kubernetes)
+        api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        if api_key:
+            return AzureOpenAIResponsesClient(api_key=api_key)
+        else:
+            from azure.identity import DefaultAzureCredential
+            return AzureOpenAIResponsesClient(credential=DefaultAzureCredential())
     else:
         return OpenAIResponsesClient()
 
@@ -336,6 +341,7 @@ def _configure_logging(verbose: bool = False) -> None:
 def run_devui(
     environment: str = "python",
     port: int = 8090,
+    host: str = "127.0.0.1",
     auto_open: bool = True,
 ) -> None:
     """Launch the DevUI web interface for testing the agent.
@@ -343,6 +349,7 @@ def run_devui(
     Args:
         environment: Execution environment - 'python' or 'hyperlight'.
         port: Port to run the DevUI server on.
+        host: Host to bind the server to (use 0.0.0.0 for Docker).
         auto_open: Whether to automatically open the browser.
     """
     from agent_framework.devui import serve
@@ -355,10 +362,10 @@ def run_devui(
     logger.info("=" * 60)
     logger.info(f"Backend: {backend}")
     logger.info(f"Environment: {environment}")
-    logger.info(f"Server: http://localhost:{port}")
+    logger.info(f"Server: http://{host}:{port}")
     logger.info("=" * 60)
 
-    serve(entities=[agent], port=port, auto_open=auto_open)
+    serve(entities=[agent], port=port, host=host, auto_open=auto_open)
 
 
 async def main() -> None:
