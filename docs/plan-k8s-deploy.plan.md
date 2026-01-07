@@ -4,7 +4,7 @@ Package the local-code-interpreter-tool as a Docker container with Hyperlight su
 
 ## Steps
 
-### 1. Create Dockerfile
+### 1. Create Dockerfile ✅ COMPLETED
 
 Create `Dockerfile` at project root with multi-stage build:
 - Use `python:3.12-slim` base image
@@ -12,13 +12,13 @@ Create `Dockerfile` at project root with multi-stage build:
 - Set `ENTRYPOINT` to `python -m local_code_interpreter --devui --port 8090`
 - Add optional `--hyperlight` flag via environment variable
 
-### 2. Create .dockerignore
+### 2. Create .dockerignore ✅ COMPLETED
 
 Create `.dockerignore` at project root to exclude:
 - `htmlcov/`, `__pycache__/`, `.git/`, `*.egg-info/`
 - `vendor/hyperlight-nanvix/target/`, `tests/`, `docs/`
 
-### 3. Create Kubernetes Manifests
+### 3. Create Kubernetes Manifests ⏳ TODO
 
 Create `k8s/` directory with:
 
@@ -60,7 +60,7 @@ spec:
 - ServiceAccount annotations:
   - `azure.workload.identity/client-id: <MANAGED_IDENTITY_CLIENT_ID>`
 
-### 4. Update agent.py
+### 4. Update agent.py ✅ COMPLETED
 
 Modify `src/local_code_interpreter/agent.py` line ~47:
 
@@ -76,7 +76,7 @@ return AzureOpenAIResponsesClient(credential=DefaultAzureCredential())
 
 This supports Workload Identity, Managed Identity, and CLI fallback automatically.
 
-### 5. Update justfile
+### 5. Update justfile ⏳ PARTIAL (docker commands done, k8s/azure commands TODO)
 
 Add new commands with configurable `IMAGE_REGISTRY` (defaults to ACR pattern):
 
@@ -169,7 +169,7 @@ azure-role-assign:
         --scope /subscriptions/{{AZURE_SUBSCRIPTION}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.CognitiveServices/accounts/{{AZURE_OPENAI_RESOURCE}}
 ```
 
-### 6. Update README.md
+### 6. Update README.md ⏳ TODO
 
 Add deployment section covering:
 - Docker build command

@@ -1,0 +1,59 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.whl
+
+# Coverage and test reports
+htmlcov/
+.coverage
+coverage.xml
+test-results.xml
+*.cover
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation (not needed in container)
+docs/
+
+# Tests (not needed in production container)
+tests/
+
+# Vendor build artifacts (Rust compilation)
+vendor/hyperlight-nanvix/target/
+
+# Environment files (secrets - pass via --env-file at runtime)
+.env
+.env.*
+!.env.example
+
+# Misc
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
