@@ -96,6 +96,94 @@ DevUI provides:
 - OpenAI-compatible API endpoints
 - Real-time conversation debugging
 
+## Docker & Kubernetes Deployment
+
+### Docker
+
+Build and run locally with Docker:
+
+```bash
+just docker-build              # Build the container image
+just docker-run                # Run with .env file for Azure auth
+just docker-up                 # Build and run in one command
+```
+
+### Kubernetes (AKS with Workload Identity)
+
+Deploy to Azure Kubernetes Service with Azure OpenAI authentication via Workload Identity:
+
+#### Prerequisites
+- AKS cluster with OIDC issuer and workload identity enabled
+- Azure Container Registry (ACR) attached to the cluster
+- Azure OpenAI resource deployed
+- `envsubst` installed
+
+#### Quick Deploy (existing cluster)
+
+```bash
+# 0. (If needed) Enable workload identity on existing cluster
+just azure-aks-enable-workload-identity
+
+# 1. Get cluster credentials
+just azure-aks-get-credentials
+
+# 2. Create managed identity and federated credential
+just azure-identity-create
+export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
+just azure-identity-federate
+
+# 3. Assign Azure OpenAI access (requires specific access, might need to do manually in Portal)
+export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)  # or specify your resource name
+just azure-role-assign
+
+# 4. Set environment variables for deployment
+export IMAGE_REGISTRY="your-acr.azurecr.io"
+export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
+export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
+# MANAGED_IDENTITY_CLIENT_ID already set from step 2
+
+# 5. Build and push container image
+just docker-build
+just docker-push
+
+# 6. Preview the deployment (optional)
+just k8s-dry-run
+
+# 7. Deploy to Kubernetes
+just k8s-deploy
+
+# 8. Get the external IP
+just k8s-ip
+```
+
+#### Full Setup (new cluster)
+
+```bash
+# Create AKS cluster with workload identity
+just azure-aks-create
+
+# Then follow the Quick Deploy steps above
+```
+
+#### Useful Commands
+
+```bash
+just k8s-status   # View deployment status
+just k8s-logs     # Tail pod logs
+just k8s-ip       # Get LoadBalancer external IP
+just k8s-delete   # Remove all resources
+```
+
+### Hyperlight on Kubernetes
+
+The deployment uses Hyperlight for secure code execution. Requirements:
+- Hyperlight device plugin installed on the cluster
+- Nodes with KVM support (`/dev/kvm`)
+
+The pod spec includes:
+- `runtimeClassName: hyperlight-kvm` - Uses Hyperlight runtime
+- `hyperlight.dev/hypervisor: "1"` - Requests hypervisor access via device plugin
+
 ## Learn More
 
 - [Microsoft Agent Framework Documentation](https://learn.microsoft.com/en-us/agent-framework/)

@@ -149,6 +149,179 @@ docker-run:
 # Build and run Docker container
 docker-up: docker-build docker-run
 
+# Push Docker image to registry
+docker-push:
+    docker push {{IMAGE}}
+
+# =============================================================================
+# Kubernetes
+# =============================================================================
+
+# Kubernetes configuration
+K8S_NAMESPACE := "local-code-interpreter"
+K8S_SERVICE_ACCOUNT := "local-code-interpreter"
+
+# Required env vars for k8s-deploy (set these or export before running):
+# - IMAGE_REGISTRY: Container registry (e.g., myacr.azurecr.io)
+# - IMAGE_TAG: Image tag (default: latest)
+# - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
+# - AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
+# - AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: Model deployment name
+
+# Deploy to Kubernetes using kustomize + envsubst for variable substitution
+k8s-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    # Set defaults for optional vars
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
+    
+    # Validate required env vars
+    required_vars=("IMAGE_REGISTRY" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
+    for var in "${required_vars[@]}"; do
+        if [ -z "${!var:-}" ]; then
+            echo "❌ Required environment variable $var is not set"
+            echo "   Set it with: export $var=<value>"
+            exit 1
+        fi
+    done
+    
+    echo "🚀 Deploying with:"
+    echo "   IMAGE: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}"
+    echo "   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}"
+    echo "   MANAGED_IDENTITY_CLIENT_ID: ${MANAGED_IDENTITY_CLIENT_ID}"
+    echo ""
+    
+    # Build with kustomize, substitute env vars, apply
+    kubectl kustomize k8s/ | envsubst | kubectl apply -f -
+    
+    echo ""
+    echo "✅ Deployment complete! Run 'just k8s-status' to check status."
+
+# Delete Kubernetes resources
+k8s-delete:
+    kubectl kustomize k8s/ | kubectl delete -f - --ignore-not-found
+
+# Preview what will be deployed (dry-run with variable substitution)
+k8s-dry-run:
+    #!/usr/bin/env bash
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
+    kubectl kustomize k8s/ | envsubst
+
+# Get deployment status
+k8s-status:
+    @echo "📊 Deployment Status:"
+    kubectl get all -n {{K8S_NAMESPACE}}
+
+# Get external IP of the LoadBalancer service
+k8s-ip:
+    @kubectl get svc local-code-interpreter -n {{K8S_NAMESPACE}} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+# View pod logs
+k8s-logs:
+    kubectl logs -n {{K8S_NAMESPACE}} -l app.kubernetes.io/name=local-code-interpreter -f
+
+# =============================================================================
+# AKS Cluster Setup
+# =============================================================================
+
+# Azure configuration for AKS
+AZURE_SUBSCRIPTION := env_var_or_default("AZURE_SUBSCRIPTION", "")
+AZURE_RESOURCE_GROUP := env_var_or_default("AZURE_RESOURCE_GROUP", "local-code-interpreter-rg")
+AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "eastus")
+AKS_CLUSTER := env_var_or_default("AKS_CLUSTER", "local-code-interpreter-aks")
+AZURE_OPENAI_RESOURCE := env_var_or_default("AZURE_OPENAI_RESOURCE", "")
+MANAGED_IDENTITY_CLIENT_ID := env_var_or_default("MANAGED_IDENTITY_CLIENT_ID", "")
+
+# Create AKS cluster with workload identity enabled
+azure-aks-create:
+    az aks create \
+        --name {{AKS_CLUSTER}} \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --location {{AZURE_LOCATION}} \
+        --enable-oidc-issuer \
+        --enable-workload-identity \
+        --generate-ssh-keys
+
+# Enable workload identity on existing AKS cluster
+azure-aks-enable-workload-identity:
+    az aks update \
+        --name {{AKS_CLUSTER}} \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --enable-oidc-issuer \
+        --enable-workload-identity
+
+# Get AKS cluster credentials
+azure-aks-get-credentials:
+    az aks get-credentials \
+        --name {{AKS_CLUSTER}} \
+        --resource-group {{AZURE_RESOURCE_GROUP}}
+
+# Attach ACR to AKS cluster (allows pulling images without imagePullSecrets)
+azure-aks-attach-acr acr:
+    az aks update \
+        --name {{AKS_CLUSTER}} \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --attach-acr {{acr}}
+
+# =============================================================================
+# Azure Workload Identity Setup
+# =============================================================================
+
+# Create user-assigned managed identity
+azure-identity-create:
+    az identity create \
+        --name local-code-interpreter \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --location {{AZURE_LOCATION}}
+
+# Create federated credential linking managed identity to Kubernetes ServiceAccount
+azure-identity-federate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    AKS_OIDC_ISSUER=$(az aks show \
+        --name {{AKS_CLUSTER}} \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --query "oidcIssuerProfile.issuerUrl" -o tsv)
+    echo "🔗 Creating federated credential with issuer: $AKS_OIDC_ISSUER"
+    az identity federated-credential create \
+        --name kubernetes-federated \
+        --identity-name local-code-interpreter \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --issuer "$AKS_OIDC_ISSUER" \
+        --subject "system:serviceaccount:{{K8S_NAMESPACE}}:{{K8S_SERVICE_ACCOUNT}}" \
+        --audiences "api://AzureADTokenExchange"
+    echo "✅ Federated credential created!"
+
+# Show managed identity client ID
+azure-identity-show:
+    @az identity show \
+        --name local-code-interpreter \
+        --resource-group {{AZURE_RESOURCE_GROUP}} \
+        --query clientId -o tsv
+
+# Assign Azure OpenAI User role to managed identity
+azure-role-assign:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{MANAGED_IDENTITY_CLIENT_ID}}" ]; then \
+        echo "❌ MANAGED_IDENTITY_CLIENT_ID not set. Run: just azure-identity-show"; \
+        exit 1; \
+    fi
+    if [ -z "{{AZURE_OPENAI_RESOURCE}}" ]; then \
+        echo "❌ AZURE_OPENAI_RESOURCE not set"; \
+        exit 1; \
+    fi
+    subscriptionId=$(az account show --query id -o tsv)
+    echo "🔐 Assigning Cognitive Services OpenAI User role..."
+    az role assignment create \
+        --assignee {{MANAGED_IDENTITY_CLIENT_ID}} \
+        --role "Cognitive Services OpenAI User" \
+        --scope "/subscriptions/$subscriptionId/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.CognitiveServices/accounts/{{AZURE_OPENAI_RESOURCE}}"
+    echo "✅ Role assigned!"
+
 # =============================================================================
 # Build & Package
 # =============================================================================
@@ -183,6 +356,10 @@ security:
 # =============================================================================
 # Azure Infrastructure
 # =============================================================================
+
+# Show Azure OpenAI resource name in a resource group
+azure-foundry-show rg="local-code-interpreter-rg":
+    @az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv
 
 # Deploy Azure AI Foundry resources (hub, project, and model)
 azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus" model="gpt-4o":

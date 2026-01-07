@@ -18,7 +18,7 @@ Create `.dockerignore` at project root to exclude:
 - `htmlcov/`, `__pycache__/`, `.git/`, `*.egg-info/`
 - `vendor/hyperlight-nanvix/target/`, `tests/`, `docs/`
 
-### 3. Create Kubernetes Manifests ⏳ TODO
+### 3. Create Kubernetes Manifests ✅ COMPLETED
 
 Create `k8s/` directory with:
 
@@ -76,7 +76,7 @@ return AzureOpenAIResponsesClient(credential=DefaultAzureCredential())
 
 This supports Workload Identity, Managed Identity, and CLI fallback automatically.
 
-### 5. Update justfile ⏳ PARTIAL (docker commands done, k8s/azure commands TODO)
+### 5. Update justfile ✅ COMPLETED
 
 Add new commands with configurable `IMAGE_REGISTRY` (defaults to ACR pattern):
 
@@ -169,7 +169,7 @@ azure-role-assign:
         --scope /subscriptions/{{AZURE_SUBSCRIPTION}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.CognitiveServices/accounts/{{AZURE_OPENAI_RESOURCE}}
 ```
 
-### 6. Update README.md ⏳ TODO
+### 6. Update README.md ✅ COMPLETED
 
 Add deployment section covering:
 - Docker build command
