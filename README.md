@@ -51,8 +51,8 @@ just interactive      # Interactive mode with python
 VM-isolated sandbox using [hyperlight-nanvix](https://github.com/hyperlight-dev/hyperlight-nanvix) for untrusted code execution. Supports JavaScript, Python, C, and C++.
 
 ```bash
-just run --hyperlight         # Demo mode with hyperlight
-just interactive --hyperlight # Interactive mode with hyperlight
+just run hyperlight         # Demo mode with hyperlight
+just interactive hyperlight # Interactive mode with hyperlight
 ```
 
 **Note:** Hyperlight requires:
@@ -85,10 +85,9 @@ Then authenticate with `az login` before running.
 The project includes a web-based interface for testing and debugging using [Agent Framework DevUI](https://github.com/microsoft/agent-framework/tree/main/python/packages/devui):
 
 ```bash
-just devui                     # Launch DevUI on http://localhost:8090
-just devui --port=8080         # Custom port
-just devui --hyperlight        # Use hyperlight environment
-just devui --no-browser        # Don't auto-open browser
+just devui                       # Launch DevUI on http://localhost:8090
+just devui hyperlight            # Use hyperlight environment
+just devui hyperlight javascript # Use hyperlight with JavaScript code execution
 ```
 
 DevUI provides:
@@ -137,7 +136,8 @@ export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)  # or specify your resou
 just azure-role-assign
 
 # 4. Set environment variables for deployment
-export IMAGE_REGISTRY="your-acr.azurecr.io"
+export IMAGE_REGISTRY_NAME="your-acr"
+export IMAGE_REGISTRY_DOMAIN="azurecr.io"
 export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
 export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
 # MANAGED_IDENTITY_CLIENT_ID already set from step 2
@@ -215,7 +215,6 @@ The deployment uses Hyperlight for secure code execution. Requirements:
 - Nodes with KVM support (`/dev/kvm`)
 
 The pod spec includes:
-- `runtimeClassName: hyperlight-kvm` - Uses Hyperlight runtime
 - `hyperlight.dev/hypervisor: "1"` - Requests hypervisor access via device plugin
 
 ## Learn More

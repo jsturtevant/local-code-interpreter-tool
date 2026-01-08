@@ -17,10 +17,11 @@ default:
 
 # Create and set up virtual environment
 setup:
-    @if ! command -v python3.10 &> /dev/null; then \
-        echo "❌ Python 3.10 not found. Please install Python 3.10+"; \
-        echo "   Ubuntu: sudo apt install python3.10 python3.10-venv"; \
-        echo "   macOS: brew install python@3.10"; \
+    @python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1); \
+    major=$(echo "$python_version" | cut -d. -f1); \
+    minor=$(echo "$python_version" | cut -d. -f2); \
+    if [ "$major" -lt 3 ] || ([ "$major" -eq 3 ] && [ "$minor" -lt 10 ]); then \
+        echo "❌ Python 3.10+ required, found Python $python_version"; \
         exit 1; \
     fi
     python3 -m venv .venv
@@ -43,25 +44,27 @@ install-dev:
 
 # Install hyperlight-nanvix Python bindings (requires Rust nightly toolchain)
 install-nanvix:
-    @{{check-venv}}
-    @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
-        echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
-        exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{check-venv}}
+    echo "📦 Installing hyperlight-nanvix Python bindings..."
+    if ! command -v rustup > /dev/null 2>&1; then
+        echo "❌ rustup not found. Please install Rust: https://rustup.rs"
+        exit 1
     fi
-    @echo "🔧 Installing Rust nightly toolchain..."
+    echo "🔧 Installing Rust nightly toolchain..."
     rustup install nightly
-    @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
-        echo "📥 Cloning hyperlight-nanvix..."; \
-        mkdir -p vendor; \
-        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix; \
-    else \
-        echo "📥 Updating hyperlight-nanvix..."; \
-        cd vendor/hyperlight-nanvix && git pull; \
+    if [ ! -d "vendor/hyperlight-nanvix" ]; then
+        echo "📥 Cloning hyperlight-nanvix..."
+        mkdir -p vendor
+        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix
+    else
+        echo "📥 Updating hyperlight-nanvix..."
+        cd vendor/hyperlight-nanvix && git pull
     fi
-    {{venv}} pip install maturin
+    . .venv/bin/activate && pip install maturin
     cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
-    @echo "✅ hyperlight-nanvix installed successfully"
+    echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
 update:
@@ -169,10 +172,11 @@ test-ci:
 # =============================================================================
 
 # Docker image configuration
-IMAGE_REGISTRY := env_var_or_default("IMAGE_REGISTRY", "hyperlightacrjs")
+IMAGE_REGISTRY_NAME := env_var_or_default("IMAGE_REGISTRY_NAME", "hyperlightacrjs")
+IMAGE_REGISTRY_DOMAIN := env_var_or_default("IMAGE_REGISTRY_DOMAIN", "azurecr.io")
 IMAGE_NAME := "local-code-interpreter"
 IMAGE_TAG := env_var_or_default("IMAGE_TAG", "latest")
-IMAGE := IMAGE_REGISTRY + "/" + IMAGE_NAME + ":" + IMAGE_TAG
+IMAGE := IMAGE_REGISTRY_NAME + "." + IMAGE_REGISTRY_DOMAIN + "/" + IMAGE_NAME + ":" + IMAGE_TAG
 
 # Build Docker image
 docker-build:
@@ -218,7 +222,8 @@ K8S_NAMESPACE := "local-code-interpreter"
 K8S_SERVICE_ACCOUNT := "local-code-interpreter"
 
 # Required env vars for k8s-deploy (set these or export before running):
-# - IMAGE_REGISTRY: Container registry (e.g., myacr.azurecr.io)
+# - IMAGE_REGISTRY_NAME: Container registry (e.g., myacr.azurecr.io)
+# - IMAGE_REGISTRY_DOMAIN: Container registry domain (e.g., azurecr.io)
 # - IMAGE_TAG: Image tag (default: latest)
 # - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
 # - AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
@@ -245,7 +250,7 @@ k8s-deploy env="" lang="javascript":
     fi
     
     # Validate required env vars
-    required_vars=("IMAGE_REGISTRY" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
+    required_vars=("IMAGE_REGISTRY_NAME" "IMAGE_REGISTRY_DOMAIN" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
     for var in "${required_vars[@]}"; do
         if [ -z "${!var:-}" ]; then
             echo "❌ Required environment variable $var is not set"
@@ -255,7 +260,7 @@ k8s-deploy env="" lang="javascript":
     done
     
     echo "🚀 Deploying with:"
-    echo "   IMAGE: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}"
+    echo "   IMAGE: ${IMAGE_REGISTRY_NAME}.${IMAGE_REGISTRY_DOMAIN}/local-code-interpreter:${IMAGE_TAG}"
     echo "   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}"
     echo "   MANAGED_IDENTITY_CLIENT_ID: ${MANAGED_IDENTITY_CLIENT_ID}"
     echo "   MODE: ${MODE_DESC}"
@@ -273,9 +278,22 @@ k8s-deploy env="" lang="javascript":
     echo ""
     echo "✅ Deployment complete! Run 'just k8s-status' to check status."
 
+# deploy to Kubernetes with Hyperlight 
+k8s-deploy-hyperlight lang="javascript":
+    just k8s-deploy hyperlight {{lang}}
+
 # Delete Kubernetes resources
 k8s-delete:
-    kubectl kustomize k8s/ | envsubst | kubectl delete -f - --ignore-not-found
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Set dummy values for envsubst (only names matter for delete, not actual values)
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+    export IMAGE_REGISTRY_NAME="${IMAGE_REGISTRY_NAME:-dummy}"
+    export IMAGE_REGISTRY_DOMAIN="${IMAGE_REGISTRY_DOMAIN:-dummy}"
+    export MANAGED_IDENTITY_CLIENT_ID="${MANAGED_IDENTITY_CLIENT_ID:-dummy}"
+    export AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT:-dummy}"
+    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-dummy}"
+    kubectl kustomize k8s/ | envsubst | kubectl delete --ignore-not-found -f -
 
 # Preview what will be deployed (dry-run with variable substitution)
 # Usage: just k8s-dry-run [env] [lang]
@@ -321,6 +339,7 @@ AZURE_RESOURCE_GROUP := env_var_or_default("AZURE_RESOURCE_GROUP", "local-code-i
 AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "eastus")
 AKS_CLUSTER := env_var_or_default("AKS_CLUSTER", "local-code-interpreter-aks")
 AZURE_OPENAI_RESOURCE := env_var_or_default("AZURE_OPENAI_RESOURCE", "")
+KVM_NODE_POOL_NAME := env_var_or_default("KVM_NODE_POOL_NAME", "kvmpool")
 MANAGED_IDENTITY_CLIENT_ID := env_var_or_default("MANAGED_IDENTITY_CLIENT_ID", "")
 
 # Create AKS cluster with workload identity enabled
@@ -332,6 +351,62 @@ azure-aks-create:
         --enable-oidc-issuer \
         --enable-workload-identity \
         --generate-ssh-keys
+
+azure-aks-deploy-kvm-pool:
+    #!/usr/bin/env bash
+    if az aks nodepool show -g {{AZURE_RESOURCE_GROUP}} --cluster-name {{AKS_CLUSTER}} -n {{KVM_NODE_POOL_NAME}} &> /dev/null; then
+        echo "KVM node pool already exists"
+    else
+        az aks nodepool add \
+            -g "{{AZURE_RESOURCE_GROUP}}" \
+            --cluster-name {{AKS_CLUSTER}} \
+            -n {{KVM_NODE_POOL_NAME}} \
+            --node-count 2 \
+            --node-vm-size Standard_D4s_v5 \
+            --os-sku Ubuntu \
+            --enable-cluster-autoscaler \
+            --min-count 1 \
+            --max-count 5 \
+            --labels "hyperlight.dev/hypervisor=kvm" "hyperlight.dev/enabled=true" \
+            --mode User \
+            --ssh-access disabled \
+            -o none
+        echo "KVM node pool created"
+    fi
+
+# Deploy device plugin to AKS from ghcr.io
+azure-aks-deploy-device-plugin:
+    kubectl apply -f k8s/device-plugin.yaml
+    @echo "✓ Device plugin deployed to AKS"
+
+# Show device plugin status
+azure-aks-plugin-status:
+    @echo "=== Device Plugin Pods ==="
+    kubectl get pods -n hyperlight-system -l app.kubernetes.io/name=hyperlight-device-plugin -o wide 2>/dev/null || echo "No pods found"
+    @echo ""
+    @echo "=== Node Resources ==="
+    kubectl get nodes -o custom-columns='NAME:.metadata.name,HYPERVISOR:.metadata.labels.hyperlight\.dev/hypervisor,CAPACITY:.status.allocatable.hyperlight\.dev/hypervisor' 2>/dev/null || echo "No nodes found"
+
+# Create ACR
+azure-create-acr:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Creating ACR: {{IMAGE_REGISTRY_NAME}}"
+    
+    if az acr show --name {{IMAGE_REGISTRY_NAME}} &> /dev/null; then
+        log_warning "ACR already exists"
+    else
+        az acr create \
+            -g {{AZURE_RESOURCE_GROUP}} \
+            -n {{IMAGE_REGISTRY_NAME}} \
+            --sku Basic \
+            -o none
+        echo "ACR created"
+    fi
+
+# Log in to Azure Container Registry
+acr-login:
+    az acr login --name {{IMAGE_REGISTRY_NAME}}
 
 # Enable workload identity on existing AKS cluster
 azure-aks-enable-workload-identity:
@@ -348,11 +423,11 @@ azure-aks-get-credentials:
         --resource-group {{AZURE_RESOURCE_GROUP}}
 
 # Attach ACR to AKS cluster (allows pulling images without imagePullSecrets)
-azure-aks-attach-acr acr:
+azure-aks-attach-acr:
     az aks update \
         --name {{AKS_CLUSTER}} \
         --resource-group {{AZURE_RESOURCE_GROUP}} \
-        --attach-acr {{acr}}
+        --attach-acr {{IMAGE_REGISTRY_NAME}}
 
 # =============================================================================
 # Azure Workload Identity Setup
