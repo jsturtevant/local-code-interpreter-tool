@@ -127,6 +127,8 @@ When to use execute_code:
 - When the user asks you to run or execute code
 - When you need to process data or demonstrate functionality
 
+ALWAYS show the code you are about to execute to the user before running it.
+
 Always be clear and concise. When reporting issues, include actionable recommendations.
 If you need more information to help, ask clarifying questions.
 """
@@ -149,6 +151,8 @@ When to use execute_code:
 - When the user asks you to run or execute code
 - When you need to process data or demonstrate functionality
 
+ALWAYS show the code you are about to execute to the user before running it.
+
 Always be clear and concise. When reporting issues, include actionable recommendations.
 If you need more information to help, ask clarifying questions.
 """
@@ -170,6 +174,8 @@ When to use execute_code:
 - When you need to test a code snippet or algorithm
 - When the user asks you to run or execute code
 - When you need to process data or demonstrate functionality
+
+ALWAYS show the code you are about to execute to the user before running it.
 
 Always be clear and concise. When reporting issues, include actionable recommendations.
 If you need more information to help, ask clarifying questions.
@@ -370,21 +376,38 @@ async def run_example_queries(
 
 
 def _configure_logging(verbose: bool = False) -> None:
-    """Configure logging and observability for the application."""
+    """Configure logging and observability for the application.
+
+    Debug mode can be enabled via environment variable: DEBUG=true
+    """
     from agent_framework.observability import enable_instrumentation
 
+    # Check environment variable for debug mode
+    debug = os.getenv("DEBUG", "").lower() in ("true", "1", "yes")
+
     # Enable Agent Framework's OpenTelemetry instrumentation
-    if verbose:
+    if verbose or debug:
         # Enable sensitive data logging for development
         enable_instrumentation(enable_sensitive_data=True)
 
     # Configure Python logging - only show warnings and errors by default
-    level = logging.DEBUG if verbose else logging.WARNING
+    if debug:
+        level = logging.DEBUG
+    elif verbose:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+
     logging.basicConfig(
         level=level,
         format="%(levelname)s - %(name)s - %(message)s",
         handlers=[logging.StreamHandler()],
     )
+
+    # Enable debug for our module when DEBUG env is set
+    if debug:
+        logging.getLogger("local_code_interpreter").setLevel(logging.DEBUG)
+
     # Reduce noise from libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)

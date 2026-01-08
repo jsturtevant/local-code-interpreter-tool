@@ -297,6 +297,14 @@ k8s-ip:
 k8s-logs:
     kubectl logs -n {{K8S_NAMESPACE}} -l app.kubernetes.io/name=local-code-interpreter -f
 
+# View pod logs (tail last N lines)
+k8s-logs-tail lines="100":
+    kubectl logs -n {{K8S_NAMESPACE}} -l app.kubernetes.io/name=local-code-interpreter --tail={{lines}}
+
+# View debug logs (script input/output only)
+k8s-logs-debug lines="200":
+    kubectl logs -n {{K8S_NAMESPACE}} -l app.kubernetes.io/name=local-code-interpreter --tail={{lines}} | grep -E "INPUT SCRIPT|EXECUTION RESULT|====|    "
+
 # =============================================================================
 # AKS Cluster Setup
 # =============================================================================

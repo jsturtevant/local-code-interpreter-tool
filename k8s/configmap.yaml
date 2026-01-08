@@ -10,3 +10,5 @@ data:
   # Azure OpenAI Configuration (substituted via envsubst)
   AZURE_OPENAI_ENDPOINT: "${AZURE_OPENAI_ENDPOINT}"
   AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: "${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME}"
+  # Debug logging - set to "false" to disable debug logging for code execution
+  DEBUG: "true"

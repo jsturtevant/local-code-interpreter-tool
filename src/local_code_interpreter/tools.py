@@ -24,6 +24,19 @@ HyperlightLanguage = Literal["javascript", "python"]
 # Set up logging - only log errors, let Agent Framework handle tracing
 logger = logging.getLogger(__name__)
 
+
+def _format_debug_output(label: str, content: str, max_preview: int = 1000) -> str:
+    """Format content for readable debug logging."""
+    truncated = len(content) > max_preview
+    preview = content[:max_preview] if truncated else content
+    truncation_note = f"\n    ... [truncated, {len(content)} total chars]" if truncated else ""
+    
+    # Indent each line for readability
+    indented = "\n".join(f"    {line}" for line in preview.splitlines())
+    
+    return f"\n{'=' * 60}\n{label}\n{'=' * 60}\n{indented}{truncation_note}\n{'=' * 60}"
+
+
 # Try to import hyperlight-nanvix (optional dependency)
 try:
     from hyperlight_nanvix import (  # type: ignore[import-untyped]
@@ -283,7 +296,8 @@ class CodeExecutionTool(AIFunction):
         Returns:
             The execution output or result message.
         """
-        logger.debug(f"_execute called with code={code!r}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(_format_debug_output("INPUT SCRIPT", code))
 
         try:
             if self.environment == "hyperlight":
@@ -297,7 +311,10 @@ class CodeExecutionTool(AIFunction):
             # Ensure we always return a non-empty string
             if not result:
                 result = "(No output)"
-            logger.debug(f"_execute returning: {result!r}")
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(_format_debug_output("EXECUTION RESULT", result))
+
             return result
         except Exception as e:
             error_msg = f"Error executing code: {e}"

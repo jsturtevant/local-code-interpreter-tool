@@ -39,6 +39,7 @@ RUN if [ "$WITH_HYPERLIGHT" = "true" ]; then \
         ./target/release/hyperlight-nanvix --setup-registry; \
     else \
         mkdir -p /wheels; \
+        mkdir -p /root/.cache/nanvix-registry; \
     fi
 
 # =============================================================================
