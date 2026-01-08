@@ -28,7 +28,7 @@ Create `k8s/` directory with:
 | `configmap.yaml` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME` |
 | `serviceaccount.yaml` | ServiceAccount with Workload Identity annotations |
 | `deployment.yaml` | Deployment with Hyperlight pod spec and Workload Identity |
-| `service.yaml` | LoadBalancer service on port 8090 |
+| `service.yaml` | ClusterIP service on port 8090 (use `just k8s-port-forward` for local access) |
 
 #### Deployment Pod Spec (Hyperlight)
 

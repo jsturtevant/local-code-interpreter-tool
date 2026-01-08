@@ -152,8 +152,8 @@ just k8s-dry-run
 # 7. Deploy to Kubernetes
 just k8s-deploy
 
-# 8. Get the external IP
-just k8s-ip
+# 8. Port forward to access locally
+just k8s-port-forward
 ```
 
 #### Deploying with Hyperlight
@@ -203,7 +203,7 @@ just azure-aks-create
 ```bash
 just k8s-status            # View deployment status
 just k8s-logs              # Tail pod logs
-just k8s-ip                # Get LoadBalancer external IP
+just k8s-port-forward      # Port forward to localhost:8090
 just k8s-delete            # Remove all resources
 just k8s-deploy-hyperlight # Deploy with Hyperlight enabled
 ```

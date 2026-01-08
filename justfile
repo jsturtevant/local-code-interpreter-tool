@@ -289,9 +289,9 @@ k8s-status:
     @echo "📊 Deployment Status:"
     kubectl get all -n {{K8S_NAMESPACE}}
 
-# Get external IP of the LoadBalancer service
-k8s-ip:
-    @kubectl get svc local-code-interpreter -n {{K8S_NAMESPACE}} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Port forward service to localhost for local testing
+k8s-port-forward:
+    kubectl port-forward -n {{K8S_NAMESPACE}} svc/local-code-interpreter 8090:8090
 
 # View pod logs
 k8s-logs:

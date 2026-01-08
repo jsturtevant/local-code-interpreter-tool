@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: local-code-interpreter
     app.kubernetes.io/component: service
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: local-code-interpreter
   ports:
