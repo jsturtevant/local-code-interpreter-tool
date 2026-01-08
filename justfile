@@ -142,12 +142,19 @@ IMAGE := IMAGE_REGISTRY + "/" + IMAGE_NAME + ":" + IMAGE_TAG
 docker-build:
     docker build -t {{IMAGE}} .
 
+# Build Docker image with Hyperlight support (includes hyperlight-nanvix)
+docker-build-hyperlight:
+    docker build --build-arg WITH_HYPERLIGHT=true -t {{IMAGE}} .
+
 # Run Docker container locally (uses env vars from .env for Azure auth)
 docker-run:
     docker run --rm -p 8090:8090 --env-file .env {{IMAGE}}
 
 # Build and run Docker container
 docker-up: docker-build docker-run
+
+# Build and run Docker container with Hyperlight
+docker-up-hyperlight: docker-build-hyperlight docker-run
 
 # Push Docker image to registry
 docker-push:
@@ -167,6 +174,7 @@ K8S_SERVICE_ACCOUNT := "local-code-interpreter"
 # - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
 # - AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
 # - AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: Model deployment name
+# - ENABLE_HYPERLIGHT: Set to "true" to enable Hyperlight executor (optional)
 
 # Deploy to Kubernetes using kustomize + envsubst for variable substitution
 k8s-deploy:
@@ -176,6 +184,7 @@ k8s-deploy:
     # Set defaults for optional vars
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
     export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
+    export ENABLE_HYPERLIGHT="${ENABLE_HYPERLIGHT:-}"
     
     # Validate required env vars
     required_vars=("IMAGE_REGISTRY" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
@@ -191,24 +200,35 @@ k8s-deploy:
     echo "   IMAGE: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}"
     echo "   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}"
     echo "   MANAGED_IDENTITY_CLIENT_ID: ${MANAGED_IDENTITY_CLIENT_ID}"
+    if [ -n "${ENABLE_HYPERLIGHT}" ]; then
+        echo "   ENABLE_HYPERLIGHT: ${ENABLE_HYPERLIGHT} (VM-isolated execution)"
+    else
+        echo "   ENABLE_HYPERLIGHT: disabled (Python subprocess execution)"
+    fi
     echo ""
     
     # Build with kustomize, substitute env vars, apply
-    kubectl kustomize k8s/ | envsubst | kubectl apply -f -
+    # Use sed to handle ENABLE_HYPERLIGHT separately to ensure it stays quoted as a string
+    kubectl kustomize k8s/ | envsubst | sed "s/__ENABLE_HYPERLIGHT__/\"${ENABLE_HYPERLIGHT:-false}\"/" | kubectl apply -f -
     
     echo ""
     echo "✅ Deployment complete! Run 'just k8s-status' to check status."
 
+# Deploy with Hyperlight enabled
+k8s-deploy-hyperlight:
+    ENABLE_HYPERLIGHT=true just k8s-deploy
+
 # Delete Kubernetes resources
 k8s-delete:
-    kubectl kustomize k8s/ | kubectl delete -f - --ignore-not-found
+    kubectl kustomize k8s/ | sed 's/__ENABLE_HYPERLIGHT__/"false"/' | kubectl delete -f - --ignore-not-found
 
 # Preview what will be deployed (dry-run with variable substitution)
 k8s-dry-run:
     #!/usr/bin/env bash
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
     export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
-    kubectl kustomize k8s/ | envsubst
+    export ENABLE_HYPERLIGHT="${ENABLE_HYPERLIGHT:-false}"
+    kubectl kustomize k8s/ | envsubst | sed "s/__ENABLE_HYPERLIGHT__/\"${ENABLE_HYPERLIGHT}\"/"
 
 # Get deployment status
 k8s-status:

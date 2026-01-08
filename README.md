@@ -156,6 +156,39 @@ just k8s-deploy
 just k8s-ip
 ```
 
+#### Deploying with Hyperlight
+
+To enable Hyperlight VM-isolated code execution instead of Python subprocess:
+
+**Step 1: Build the image with Hyperlight support**
+
+The Docker image must be built with the `WITH_HYPERLIGHT=true` build arg to include the hyperlight-nanvix library:
+
+```bash
+# Build with Hyperlight support (takes longer, includes Rust build)
+just docker-build-hyperlight
+
+# Push to registry
+just docker-push
+```
+
+**Step 2: Deploy with Hyperlight enabled**
+
+```bash
+# Option 1: Use the convenience command
+just k8s-deploy-hyperlight
+
+# Option 2: Set the environment variable explicitly
+export ENABLE_HYPERLIGHT=true
+just k8s-deploy
+```
+
+**Note:** Hyperlight requires:
+- Docker image built with `WITH_HYPERLIGHT=true` (step 1 above)
+- Hyperlight device plugin installed on the cluster
+- Nodes with KVM support (the `kvmpool` node pool)
+- The deployment already includes `runtimeClassName: hyperlight-kvm` and `hyperlight.dev/hypervisor: "1"` resource limit
+
 #### Full Setup (new cluster)
 
 ```bash
@@ -168,10 +201,11 @@ just azure-aks-create
 #### Useful Commands
 
 ```bash
-just k8s-status   # View deployment status
-just k8s-logs     # Tail pod logs
-just k8s-ip       # Get LoadBalancer external IP
-just k8s-delete   # Remove all resources
+just k8s-status            # View deployment status
+just k8s-logs              # Tail pod logs
+just k8s-ip                # Get LoadBalancer external IP
+just k8s-delete            # Remove all resources
+just k8s-deploy-hyperlight # Deploy with Hyperlight enabled
 ```
 
 ### Hyperlight on Kubernetes
