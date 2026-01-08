@@ -20,6 +20,7 @@ setup:
     python3 -m venv .venv
     {{venv}} pip install --upgrade pip
     {{venv}} pip install -r requirements.txt
+    {{venv}} pip install -r requirements-dev.txt
     {{venv}} pip install -e .
     just install-nanvix
     @echo "✅ Virtual environment ready. Run: source .venv/bin/activate"
