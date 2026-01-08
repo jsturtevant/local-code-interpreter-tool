@@ -86,9 +86,6 @@ USER appuser
 # Expose DevUI port
 EXPOSE 8090
 
-# Environment variable to enable Hyperlight executor (set to "true" to enable)
-ENV ENABLE_HYPERLIGHT=""
-
-# Default entrypoint runs DevUI server bound to 0.0.0.0 for container access
-# Use shell form to allow environment variable expansion
-ENTRYPOINT ["/bin/sh", "-c", "python -m local_code_interpreter --devui --port=8090 --host=0.0.0.0 --no-browser ${ENABLE_HYPERLIGHT:+--hyperlight}"]
+# Run the code interpreter with DevUI server bound to 0.0.0.0 for container access
+# Add --hyperlight [python|javascript] via K8s args to enable VM-isolated execution
+ENTRYPOINT ["python", "-m", "local_code_interpreter", "--devui", "--port=8090", "--host=0.0.0.0", "--no-browser"]

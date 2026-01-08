@@ -66,20 +66,50 @@ update:
 # Running the Agent
 # =============================================================================
 
-# Run the full agent
-run *args:
+# Run the agent with example queries
+# Usage: just run [environment] [language]
+#   just run                    - Python subprocess (default)
+#   just run python             - Python subprocess
+#   just run hyperlight         - Hyperlight with JavaScript (default)
+#   just run hyperlight js      - Hyperlight with JavaScript
+#   just run hyperlight python  - Hyperlight with Python
+run env="python" lang="":
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter {{args}}
+    @if [ "{{env}}" = "hyperlight" ]; then \
+        {{venv}} python -m local_code_interpreter --hyperlight {{lang}}; \
+    else \
+        {{venv}} python -m local_code_interpreter; \
+    fi
 
 # Run in interactive chat mode
-interactive *args:
+# Usage: just interactive [environment] [language]
+#   just interactive                    - Python subprocess (default)
+#   just interactive python             - Python subprocess
+#   just interactive hyperlight         - Hyperlight with JavaScript (default)
+#   just interactive hyperlight js      - Hyperlight with JavaScript
+#   just interactive hyperlight python  - Hyperlight with Python
+interactive env="python" lang="":
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter --interactive {{args}}
+    @if [ "{{env}}" = "hyperlight" ]; then \
+        {{venv}} python -m local_code_interpreter --interactive --hyperlight {{lang}}; \
+    else \
+        {{venv}} python -m local_code_interpreter --interactive; \
+    fi
 
 # Launch the DevUI web interface for testing
-devui *args:
+# Usage: just devui [environment] [language]
+#   just devui                    - Python subprocess (default)
+#   just devui python             - Python subprocess
+#   just devui hyperlight         - Hyperlight with JavaScript (default)
+#   just devui hyperlight js      - Hyperlight with JavaScript
+#   just devui hyperlight python  - Hyperlight with Python
+devui env="python" lang="":
     @{{check-venv}}
-    {{venv}} python -m local_code_interpreter --devui {{args}}
+    @if [ "{{env}}" = "hyperlight" ]; then \
+        {{venv}} python -m local_code_interpreter --devui --hyperlight {{lang}}; \
+    else \
+        {{venv}} python -m local_code_interpreter --devui; \
+    fi
 
 # =============================================================================
 # Code Quality
@@ -147,14 +177,27 @@ docker-build-hyperlight:
     docker build --build-arg WITH_HYPERLIGHT=true -t {{IMAGE}} .
 
 # Run Docker container locally (uses env vars from .env for Azure auth)
-docker-run:
-    docker run --rm -p 8090:8090 --env-file .env {{IMAGE}}
+# Usage: just docker-run [env] [lang]
+#   just docker-run                    - Python subprocess (default)
+#   just docker-run hyperlight         - Hyperlight with JavaScript
+#   just docker-run hyperlight python  - Hyperlight with Python
+docker-run env="python" lang="javascript":
+    @if [ "{{env}}" = "hyperlight" ]; then \
+        docker run --rm -p 8090:8090 --env-file .env {{IMAGE}} --hyperlight {{lang}}; \
+    else \
+        docker run --rm -p 8090:8090 --env-file .env {{IMAGE}}; \
+    fi
 
 # Build and run Docker container
 docker-up: docker-build docker-run
 
-# Build and run Docker container with Hyperlight
-docker-up-hyperlight: docker-build-hyperlight docker-run
+# Build and run Docker container with Hyperlight JavaScript
+docker-up-hyperlight: docker-build-hyperlight
+    just docker-run hyperlight javascript
+
+# Build and run Docker container with Hyperlight Python
+docker-up-hyperlight-python: docker-build-hyperlight
+    just docker-run hyperlight python
 
 # Push Docker image to registry
 docker-push:
@@ -174,17 +217,26 @@ K8S_SERVICE_ACCOUNT := "local-code-interpreter"
 # - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
 # - AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
 # - AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: Model deployment name
-# - ENABLE_HYPERLIGHT: Set to "true" to enable Hyperlight executor (optional)
 
 # Deploy to Kubernetes using kustomize + envsubst for variable substitution
-k8s-deploy:
+# Usage: just k8s-deploy [env] [lang]
+#   just k8s-deploy                    - No hyperlight (subprocess execution)
+#   just k8s-deploy hyperlight         - Hyperlight with JavaScript
+#   just k8s-deploy hyperlight python  - Hyperlight with Python
+k8s-deploy env="" lang="javascript":
     #!/usr/bin/env bash
     set -euo pipefail
     
     # Set defaults for optional vars
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
     export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
-    export ENABLE_HYPERLIGHT="${ENABLE_HYPERLIGHT:-}"
+    
+    # Set mode description
+    if [ "{{env}}" = "hyperlight" ]; then
+        MODE_DESC="Hyperlight {{lang}}"
+    else
+        MODE_DESC="Python subprocess"
+    fi
     
     # Validate required env vars
     required_vars=("IMAGE_REGISTRY" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
@@ -200,35 +252,37 @@ k8s-deploy:
     echo "   IMAGE: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}"
     echo "   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}"
     echo "   MANAGED_IDENTITY_CLIENT_ID: ${MANAGED_IDENTITY_CLIENT_ID}"
-    if [ -n "${ENABLE_HYPERLIGHT}" ]; then
-        echo "   ENABLE_HYPERLIGHT: ${ENABLE_HYPERLIGHT} (VM-isolated execution)"
-    else
-        echo "   ENABLE_HYPERLIGHT: disabled (Python subprocess execution)"
-    fi
+    echo "   MODE: ${MODE_DESC}"
     echo ""
     
-    # Build with kustomize, substitute env vars, apply
-    # Use sed to handle ENABLE_HYPERLIGHT separately to ensure it stays quoted as a string
-    kubectl kustomize k8s/ | envsubst | sed "s/__ENABLE_HYPERLIGHT__/\"${ENABLE_HYPERLIGHT:-false}\"/" | kubectl apply -f -
+    # Build with kustomize, substitute env vars, optionally add hyperlight args, apply
+    if [ "{{env}}" = "hyperlight" ]; then
+        kubectl kustomize k8s/ | envsubst | \
+            sed 's/imagePullPolicy: Always/imagePullPolicy: Always\n        args:\n        - "--hyperlight"\n        - "{{lang}}"/' | \
+            kubectl apply -f -
+    else
+        kubectl kustomize k8s/ | envsubst | kubectl apply -f -
+    fi
     
     echo ""
     echo "✅ Deployment complete! Run 'just k8s-status' to check status."
 
-# Deploy with Hyperlight enabled
-k8s-deploy-hyperlight:
-    ENABLE_HYPERLIGHT=true just k8s-deploy
-
 # Delete Kubernetes resources
 k8s-delete:
-    kubectl kustomize k8s/ | sed 's/__ENABLE_HYPERLIGHT__/"false"/' | kubectl delete -f - --ignore-not-found
+    kubectl kustomize k8s/ | envsubst | kubectl delete -f - --ignore-not-found
 
 # Preview what will be deployed (dry-run with variable substitution)
-k8s-dry-run:
+# Usage: just k8s-dry-run [env] [lang]
+k8s-dry-run env="" lang="javascript":
     #!/usr/bin/env bash
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
     export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
-    export ENABLE_HYPERLIGHT="${ENABLE_HYPERLIGHT:-false}"
-    kubectl kustomize k8s/ | envsubst | sed "s/__ENABLE_HYPERLIGHT__/\"${ENABLE_HYPERLIGHT}\"/"
+    if [ "{{env}}" = "hyperlight" ]; then
+        kubectl kustomize k8s/ | envsubst | \
+            sed 's/imagePullPolicy: Always/imagePullPolicy: Always\n        args:\n        - "--hyperlight"\n        - "{{lang}}"/'
+    else
+        kubectl kustomize k8s/ | envsubst
+    fi
 
 # Get deployment status
 k8s-status:

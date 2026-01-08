@@ -38,6 +38,8 @@ spec:
         - name: app
           image: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}
           imagePullPolicy: Always
+          # Optional 
+          #args: --hyperlight [python|javascript]
           
           ports:
             - name: http

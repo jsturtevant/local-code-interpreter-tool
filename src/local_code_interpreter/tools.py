@@ -18,6 +18,9 @@ from typing import Annotated, Literal, Optional
 from agent_framework import AIFunction
 from pydantic import Field
 
+# Type alias for hyperlight language options
+HyperlightLanguage = Literal["javascript", "python"]
+
 # Set up logging - only log errors, let Agent Framework handle tracing
 logger = logging.getLogger(__name__)
 
@@ -89,12 +92,25 @@ async def _run_hyperlight(
     code: str,
     sandbox: "NanvixSandbox",
     tmp_directory: str,
+    language: HyperlightLanguage = "javascript",
 ) -> str:
-    """Execute JavaScript code in a hyperlight-nanvix VM sandbox."""
+    """Execute code in a hyperlight-nanvix VM sandbox.
+
+    Args:
+        code: The code to execute.
+        sandbox: The NanvixSandbox instance.
+        tmp_directory: Directory for temporary files.
+        language: The language of the code - 'javascript' or 'python'.
+
+    Returns:
+        The execution output or error message.
+    """
     workload_dir = os.path.join(tmp_directory, "hyperlight-workloads")
     os.makedirs(workload_dir, exist_ok=True)
 
-    filename = f"workload_{uuid.uuid4().hex[:8]}.js"
+    # Use appropriate file extension based on language
+    extension = "py" if language == "python" else "js"
+    filename = f"workload_{uuid.uuid4().hex[:8]}.{extension}"
     workload_path = os.path.join(workload_dir, filename)
     stdout_capture_path = os.path.join(tmp_directory, f"stdout_{uuid.uuid4().hex[:8]}.txt")
 
@@ -155,6 +171,10 @@ class CodeExecutionTool(AIFunction):
     - 'python': Run Python code in an isolated subprocess (fast, medium security)
     - 'hyperlight': Run code in a VM-isolated Nanvix sandbox (slower, high security)
 
+    For hyperlight environment, you can choose the language:
+    - 'javascript': Execute JavaScript code (default for hyperlight)
+    - 'python': Execute Python code in the hyperlight VM sandbox
+
     Examples:
         .. code-block:: python
 
@@ -166,14 +186,17 @@ class CodeExecutionTool(AIFunction):
             # Python with custom timeout
             code_tool = CodeExecutionTool(timeout=60)
 
-            # Hyperlight VM sandbox - secure, for untrusted code
+            # Hyperlight VM sandbox with JavaScript (default)
             code_tool = CodeExecutionTool(
                 environment="hyperlight",
                 log_directory="/tmp/hyperlight-logs",
             )
 
-            # Hyperlight executes JavaScript in a VM sandbox
-            code_tool = CodeExecutionTool(environment="hyperlight")
+            # Hyperlight VM sandbox with Python
+            code_tool = CodeExecutionTool(
+                environment="hyperlight",
+                hyperlight_language="python",
+            )
     """
 
     def __init__(
@@ -183,6 +206,7 @@ class CodeExecutionTool(AIFunction):
         timeout: int = 30,
         log_directory: Optional[str] = None,
         tmp_directory: Optional[str] = None,
+        hyperlight_language: HyperlightLanguage = "javascript",
         approval_mode: Literal["always_require", "never_require"] = "always_require",
         **kwargs,
     ) -> None:
@@ -193,6 +217,8 @@ class CodeExecutionTool(AIFunction):
             timeout: Execution timeout in seconds (python env only). Defaults to 30.
             log_directory: Directory for sandbox logs (hyperlight env only).
             tmp_directory: Directory for temporary files (hyperlight env only).
+            hyperlight_language: Language for hyperlight env - 'javascript' or 'python'.
+                Defaults to 'javascript'. Only used when environment='hyperlight'.
             approval_mode: Whether approval is required. Defaults to "always_require".
 
         Raises:
@@ -202,6 +228,7 @@ class CodeExecutionTool(AIFunction):
         self.timeout = timeout
         self.log_directory = log_directory or tempfile.gettempdir()
         self.tmp_directory = tmp_directory or tempfile.gettempdir()
+        self.hyperlight_language = hyperlight_language
         self._sandbox: Optional["NanvixSandbox"] = None
 
         if environment == "hyperlight" and not HYPERLIGHT_AVAILABLE:
@@ -211,8 +238,9 @@ class CodeExecutionTool(AIFunction):
             )
 
         if environment == "hyperlight":
+            lang_name = "Python" if hyperlight_language == "python" else "JavaScript"
             description = (
-                "Execute JavaScript code in a secure hyperlight-nanvix sandbox "
+                f"Execute {lang_name} code in a secure hyperlight-nanvix sandbox "
                 "with VM-level isolation."
             )
         else:
@@ -260,7 +288,9 @@ class CodeExecutionTool(AIFunction):
         try:
             if self.environment == "hyperlight":
                 sandbox = self._get_sandbox()
-                result = await _run_hyperlight(code, sandbox, self.tmp_directory)
+                result = await _run_hyperlight(
+                    code, sandbox, self.tmp_directory, self.hyperlight_language
+                )
             else:
                 result = await _run_python(code, self.timeout)
 

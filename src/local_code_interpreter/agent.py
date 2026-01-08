@@ -26,7 +26,7 @@ from tenacity import (
 from agent_framework import AIFunction, ChatAgent, ChatContext, ChatMiddleware
 from agent_framework.openai import OpenAIResponsesClient
 
-from .tools import CodeExecutionTool, HYPERLIGHT_AVAILABLE
+from .tools import CodeExecutionTool, HyperlightLanguage, HYPERLIGHT_AVAILABLE
 
 # Load environment variables from .env file
 load_dotenv()
@@ -44,13 +44,14 @@ def _create_chat_client():
     """Create the appropriate chat client based on environment configuration."""
     if _is_azure_configured():
         from agent_framework.azure import AzureOpenAIResponsesClient
-        
+
         # Check for API key first (local dev), then fall back to DefaultAzureCredential (Kubernetes)
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         if api_key:
             return AzureOpenAIResponsesClient(api_key=api_key)
         else:
             from azure.identity import DefaultAzureCredential
+
             return AzureOpenAIResponsesClient(credential=DefaultAzureCredential())
     else:
         return OpenAIResponsesClient()
@@ -130,7 +131,7 @@ Always be clear and concise. When reporting issues, include actionable recommend
 If you need more information to help, ask clarifying questions.
 """
 
-INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT = """You are a Local Code Interpreter Assistant, helping users execute and test code.
+INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT_JS = """You are a Local Code Interpreter Assistant, helping users execute and test code.
 
 Your capabilities include:
 - Executing JavaScript code in a secure VM-isolated sandbox using the execute_code tool
@@ -152,10 +153,33 @@ Always be clear and concise. When reporting issues, include actionable recommend
 If you need more information to help, ask clarifying questions.
 """
 
+INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT_PY = """You are a Local Code Interpreter Assistant, helping users execute and test code.
+
+Your capabilities include:
+- Executing Python code in a secure VM-isolated sandbox using the execute_code tool
+- Testing code snippets and algorithms
+- Running calculations and data processing
+
+IMPORTANT: You are running in hyperlight mode with Python. The code executes in a VM-isolated sandbox.
+- Use print() to display values (e.g., print(2 + 2) not just 2 + 2)
+- For expressions, wrap them in print() to see the output
+- Without print(), calculations run silently with no visible result
+
+When to use execute_code:
+- When you need to perform calculations or verify mathematical results
+- When you need to test a code snippet or algorithm
+- When the user asks you to run or execute code
+- When you need to process data or demonstrate functionality
+
+Always be clear and concise. When reporting issues, include actionable recommendations.
+If you need more information to help, ask clarifying questions.
+"""
+
 
 def create_interpreter_agent(
     environment: str = "python",
     timeout: int = 30,
+    hyperlight_language: HyperlightLanguage = "javascript",
     name: str = "code-interpreter",
     description: str | None = None,
 ) -> ChatAgent:
@@ -167,6 +191,7 @@ def create_interpreter_agent(
     Args:
         environment: Execution environment - 'python' or 'hyperlight'.
         timeout: Execution timeout in seconds (for python environment).
+        hyperlight_language: Language for hyperlight - 'javascript' or 'python'.
         name: Agent name (used by DevUI).
         description: Agent description (used by DevUI).
     """
@@ -180,20 +205,27 @@ def create_interpreter_agent(
         CodeExecutionTool(
             environment=environment,  # type: ignore[arg-type]
             timeout=timeout,
+            hyperlight_language=hyperlight_language,
             approval_mode="never_require",
         ),
     ]
 
-    # Select instructions based on environment
-    instructions = (
-        INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT
-        if environment == "hyperlight"
-        else INTERPRETER_AGENT_INSTRUCTIONS_PYTHON
-    )
+    # Select instructions based on environment and language
+    if environment == "hyperlight":
+        instructions = (
+            INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT_PY
+            if hyperlight_language == "python"
+            else INTERPRETER_AGENT_INSTRUCTIONS_HYPERLIGHT_JS
+        )
+    else:
+        instructions = INTERPRETER_AGENT_INSTRUCTIONS_PYTHON
 
     backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
     if description is None:
-        lang = "JavaScript" if environment == "hyperlight" else "Python"
+        if environment == "hyperlight":
+            lang = "Python" if hyperlight_language == "python" else "JavaScript"
+        else:
+            lang = "Python"
         description = (
             f"Local Code Interpreter using {backend}. "
             f"Execute {lang} code in a sandboxed {environment} environment."
@@ -220,16 +252,27 @@ def create_interpreter_agent(
 # =============================================================================
 
 
-async def run_interactive_session(environment: str = "python") -> None:
+async def run_interactive_session(
+    environment: str = "python",
+    hyperlight_language: HyperlightLanguage = "javascript",
+) -> None:
     """Run an interactive chat session with the interpreter agent."""
     backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    if environment == "hyperlight":
+        lang = "Python" if hyperlight_language == "python" else "JavaScript"
+        env_info = f"hyperlight/{lang}"
+    else:
+        env_info = environment
     print("=" * 60)
-    print(f"Local Code Interpreter Agent ({backend}, {environment} environment)")
+    print(f"Local Code Interpreter Agent ({backend}, {env_info} environment)")
     print("Type 'quit' or 'exit' to end the session")
     print("=" * 60)
     print()
 
-    agent = create_interpreter_agent(environment=environment)
+    agent = create_interpreter_agent(
+        environment=environment,
+        hyperlight_language=hyperlight_language,
+    )
 
     while True:
         try:
@@ -290,15 +333,26 @@ async def run_streaming_with_retry(
                 raise
 
 
-async def run_example_queries(environment: str = "python") -> None:
+async def run_example_queries(
+    environment: str = "python",
+    hyperlight_language: HyperlightLanguage = "javascript",
+) -> None:
     """Run some example queries to demonstrate the agent's capabilities."""
     backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    if environment == "hyperlight":
+        lang = "Python" if hyperlight_language == "python" else "JavaScript"
+        env_info = f"hyperlight/{lang}"
+    else:
+        env_info = environment
     print("=" * 60)
-    print(f"Local Code Interpreter Agent ({backend}, {environment} environment)")
+    print(f"Local Code Interpreter Agent ({backend}, {env_info} environment)")
     print("=" * 60)
     print()
 
-    agent = create_interpreter_agent(environment=environment)
+    agent = create_interpreter_agent(
+        environment=environment,
+        hyperlight_language=hyperlight_language,
+    )
 
     example_queries = [
         "Calculate the sum of the first 100 prime numbers",
@@ -340,6 +394,7 @@ def _configure_logging(verbose: bool = False) -> None:
 
 def run_devui(
     environment: str = "python",
+    hyperlight_language: HyperlightLanguage = "javascript",
     port: int = 8090,
     host: str = "127.0.0.1",
     auto_open: bool = True,
@@ -348,20 +403,29 @@ def run_devui(
 
     Args:
         environment: Execution environment - 'python' or 'hyperlight'.
+        hyperlight_language: Language for hyperlight - 'javascript' or 'python'.
         port: Port to run the DevUI server on.
         host: Host to bind the server to (use 0.0.0.0 for Docker).
         auto_open: Whether to automatically open the browser.
     """
     from agent_framework.devui import serve
 
-    agent = create_interpreter_agent(environment=environment)
+    agent = create_interpreter_agent(
+        environment=environment,
+        hyperlight_language=hyperlight_language,
+    )
 
     backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    if environment == "hyperlight":
+        lang = "Python" if hyperlight_language == "python" else "JavaScript"
+        env_info = f"hyperlight/{lang}"
+    else:
+        env_info = environment
     logger.info("=" * 60)
     logger.info("Local Code Interpreter - DevUI")
     logger.info("=" * 60)
     logger.info(f"Backend: {backend}")
-    logger.info(f"Environment: {environment}")
+    logger.info(f"Environment: {env_info}")
     logger.info(f"Server: http://{host}:{port}")
     logger.info("=" * 60)
 
@@ -370,16 +434,62 @@ def run_devui(
 
 async def main() -> None:
     """Main entry point."""
-    import sys
+    import argparse
 
-    # Parse flags
-    verbose = "--verbose" in sys.argv or "-v" in sys.argv
-    environment = "hyperlight" if "--hyperlight" in sys.argv else "python"
+    parser = argparse.ArgumentParser(description="Local Code Interpreter Agent")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--interactive", action="store_true", help="Run in interactive chat mode")
+    parser.add_argument("--devui", action="store_true", help="Launch DevUI web interface")
+    parser.add_argument(
+        "--port", type=int, default=8090, help="Port for DevUI server (default: 8090)"
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host for DevUI server (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Don't auto-open browser for DevUI",
+    )
+    parser.add_argument(
+        "--hyperlight",
+        nargs="?",
+        const="javascript",
+        choices=["python", "js", "javascript"],
+        metavar="LANG",
+        help="Use hyperlight VM sandbox. Optional: python, js, javascript (default: javascript)",
+    )
+
+    args = parser.parse_args()
+
+    # Determine environment and language
+    if args.hyperlight:
+        environment = "hyperlight"
+        hyperlight_language: HyperlightLanguage = (
+            "python" if args.hyperlight == "python" else "javascript"
+        )
+    else:
+        environment = "python"
+        hyperlight_language = "javascript"  # Not used, but needed for type
 
     # Configure logging and observability
-    _configure_logging(verbose=verbose)
+    _configure_logging(verbose=args.verbose)
 
-    if "--interactive" in sys.argv:
-        await run_interactive_session(environment=environment)
+    if args.devui:
+        run_devui(
+            environment=environment,
+            hyperlight_language=hyperlight_language,
+            port=args.port,
+            host=args.host,
+            auto_open=not args.no_browser,
+        )
+    elif args.interactive:
+        await run_interactive_session(
+            environment=environment,
+            hyperlight_language=hyperlight_language,
+        )
     else:
-        await run_example_queries(environment=environment)
+        await run_example_queries(
+            environment=environment,
+            hyperlight_language=hyperlight_language,
+        )

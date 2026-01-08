@@ -10,5 +10,3 @@ data:
   # Azure OpenAI Configuration (substituted via envsubst)
   AZURE_OPENAI_ENDPOINT: "${AZURE_OPENAI_ENDPOINT}"
   AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: "${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME}"
-  # Set to "true" to enable Hyperlight VM-isolated code execution
-  ENABLE_HYPERLIGHT: __ENABLE_HYPERLIGHT__
