@@ -432,8 +432,12 @@ def run_devui(
     serve(entities=[agent], port=port, host=host, auto_open=auto_open)
 
 
-async def main() -> None:
-    """Main entry point."""
+def cli() -> None:
+    """Command-line interface entry point.
+    
+    Handles all argument parsing in one place and dispatches to the appropriate mode.
+    This is a sync function because run_devui() runs its own event loop.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(description="Local Code Interpreter Agent")
@@ -475,7 +479,9 @@ async def main() -> None:
     # Configure logging and observability
     _configure_logging(verbose=args.verbose)
 
+    # Dispatch to the appropriate mode
     if args.devui:
+        # run_devui runs its own event loop (uvicorn)
         run_devui(
             environment=environment,
             hyperlight_language=hyperlight_language,
@@ -484,12 +490,16 @@ async def main() -> None:
             auto_open=not args.no_browser,
         )
     elif args.interactive:
-        await run_interactive_session(
-            environment=environment,
-            hyperlight_language=hyperlight_language,
+        asyncio.run(
+            run_interactive_session(
+                environment=environment,
+                hyperlight_language=hyperlight_language,
+            )
         )
     else:
-        await run_example_queries(
-            environment=environment,
-            hyperlight_language=hyperlight_language,
+        asyncio.run(
+            run_example_queries(
+                environment=environment,
+                hyperlight_language=hyperlight_language,
+            )
         )
