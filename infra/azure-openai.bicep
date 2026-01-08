@@ -84,7 +84,7 @@ output projectPortalUrl string = 'https://ai.azure.com/resource${foundry.id}/pro
 output endpoint string = foundry.properties.endpoint
 
 @description('The Foundry API endpoint (new unified API)')
-output foundryApiEndpoint string = foundry.properties.endpoints.AIServices
+output foundryApiEndpoint string = foundry.properties.endpoints['AI Foundry API']
 
 @description('The deployment name to use in API calls')
 output outputDeploymentName string = deployment.name

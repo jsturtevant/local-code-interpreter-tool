@@ -17,9 +17,15 @@ default:
 
 # Create and set up virtual environment
 setup:
+    @if ! command -v python3.10 &> /dev/null; then \
+        echo "❌ Python 3.10 not found. Please install Python 3.10+"; \
+        echo "   Ubuntu: sudo apt install python3.10 python3.10-venv"; \
+        echo "   macOS: brew install python@3.10"; \
+        exit 1; \
+    fi
     python3 -m venv .venv
     {{venv}} pip install --upgrade pip
-    {{venv}} pip install -r requirements.txt
+    {{venv}} pip install --pre -r requirements.txt
     {{venv}} pip install -e .
     just install-nanvix
     @echo "✅ Virtual environment ready. Run: source .venv/bin/activate"
@@ -474,17 +480,24 @@ azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus" model="gpt-4o":
 azure-foundry-grant-access rg="local-code-interpreter-rg":
     #!/usr/bin/env bash
     set -euo pipefail
-    email=$(az account show --query user.name -o tsv)
-    subscriptionId=$(az account show --query id -o tsv)
-    foundryName=$(az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv)
+    # Get the signed-in user's object ID and email directly (tr -d removes Windows carriage returns)
+    objectId=$(az ad signed-in-user show --query id -o tsv | tr -d '\r')
+    email=$(az ad signed-in-user show --query userPrincipalName -o tsv | tr -d '\r')
+    subscriptionId=$(az account show --query id -o tsv | tr -d '\r')
+    foundryName=$(az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv | tr -d '\r')
     if [ -z "$foundryName" ]; then \
       echo "❌ No AI Services account found in resource group {{rg}}"; \
       exit 1; \
     fi
-    echo "🔐 Granting Azure AI User role to $email..."
+    if [ -z "$objectId" ]; then \
+      echo "❌ Could not get user object ID"; \
+      exit 1; \
+    fi
+    echo "🔐 Granting Azure AI User role to $email on $foundryName..."
     az role assignment create \
       --role "Azure AI User" \
-      --assignee "$email" \
+      --assignee-object-id "$objectId" \
+      --assignee-principal-type User \
       --scope "/subscriptions/$subscriptionId/resourceGroups/{{rg}}/providers/Microsoft.CognitiveServices/accounts/$foundryName"
 
 # List soft-deleted Cognitive Services accounts
