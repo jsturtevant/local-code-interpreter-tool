@@ -24,9 +24,19 @@ def _check_hyperlight_runtime() -> bool:
     async def _test_execution() -> bool:
         try:
             tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
-            result = await tool._execute(code="console.log(1)")
-            # Check if execution succeeded (output should contain "1" not an error)
-            return "1" in result and "failed" not in result.lower()
+            result = await tool._execute(code='console.log("hyperlight_test_ok")')
+            # Check for specific success output and absence of known error patterns
+            # Known failure patterns from hyperlight:
+            # - "Execution failed:" prefix
+            # - "Error during sandbox execution:"
+            # - "Workload execution failed:"
+            has_expected_output = "hyperlight_test_ok" in result
+            has_error = (
+                result.startswith("Execution failed:")
+                or result.startswith("Error during sandbox execution:")
+                or "Workload execution failed:" in result
+            )
+            return has_expected_output and not has_error
         except Exception:
             return False
 
