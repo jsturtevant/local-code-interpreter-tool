@@ -69,7 +69,8 @@ jobs:
           fi
           
           # Check for any references to justfile commands or repo paths
-          if grep -E "justfile|just |\.\.\/|requirements\.txt" scripts/*.py scripts/*.sh 2>/dev/null; then
+          # Use word boundaries to catch all 'just' command references
+          if grep -E "justfile|\bjust\b|\.\.\/|requirements\.txt" scripts/*.py scripts/*.sh 2>/dev/null; then
             echo "❌ Found reference to repo files in skill scripts"
             exit 1
           fi
@@ -82,9 +83,9 @@ jobs:
           
           echo "📦 Running setup.sh in isolated environment..."
           
-          # Run setup script non-interactively (auto-accept prompts)
+          # Run setup script non-interactively using 'yes' for robust prompt handling
           # Rust is already installed by the workflow
-          bash -c 'echo "y" | ./scripts/setup.sh'
+          yes | timeout 600 ./scripts/setup.sh
           
           echo "✅ Setup completed in isolation"
 
