@@ -76,8 +76,7 @@ install-nanvix:
     pip install maturin
     
     # Build hyperlight-nanvix with maturin
-    cd vendor/hyperlight-nanvix
-    VIRTUAL_ENV="$PROJECT_ROOT/.venv" maturin develop --features python
+    (cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$PROJECT_ROOT/.venv" maturin develop --features python)
     
     echo "✅ hyperlight-nanvix installed successfully"
 
