@@ -20,6 +20,7 @@ setup:
     python3 -m venv .venv
     {{venv}} pip install --upgrade pip
     {{venv}} pip install -r requirements.txt
+    {{venv}} pip install -r requirements-dev.txt
     {{venv}} pip install -e .
     just install-nanvix
     @echo "✅ Virtual environment ready. Run: source .venv/bin/activate"
@@ -39,12 +40,12 @@ install-dev:
 install-nanvix:
     @{{check-venv}}
     @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
+    @if ! command -v rustup &> /dev/null && [ ! -x "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" ]; then \
         echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
         exit 1; \
     fi
     @echo "🔧 Installing Rust nightly toolchain..."
-    rustup install nightly
+    "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" install nightly
     @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
         echo "📥 Cloning hyperlight-nanvix..."; \
         mkdir -p vendor; \
@@ -54,7 +55,7 @@ install-nanvix:
         cd vendor/hyperlight-nanvix && git pull; \
     fi
     {{venv}} pip install maturin
-    cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
+    {{venv}} cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
     @echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
