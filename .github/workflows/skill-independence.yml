@@ -11,6 +11,10 @@ on:
     paths:
       - '.claude/skills/execute-code/**'
 
+# Minimal permissions needed for this workflow
+permissions:
+  contents: read
+
 jobs:
   # ==========================================================================
   # Verify execute-code skill is truly standalone
