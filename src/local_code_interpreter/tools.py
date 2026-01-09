@@ -30,10 +30,10 @@ def _format_debug_output(label: str, content: str, max_preview: int = 1000) -> s
     truncated = len(content) > max_preview
     preview = content[:max_preview] if truncated else content
     truncation_note = f"\n    ... [truncated, {len(content)} total chars]" if truncated else ""
-    
+
     # Indent each line for readability
     indented = "\n".join(f"    {line}" for line in preview.splitlines())
-    
+
     return f"\n{'=' * 60}\n{label}\n{'=' * 60}\n{indented}{truncation_note}\n{'=' * 60}"
 
 

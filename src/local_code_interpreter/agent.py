@@ -457,7 +457,7 @@ def run_devui(
 
 def cli() -> None:
     """Command-line interface entry point.
-    
+
     Handles all argument parsing in one place and dispatches to the appropriate mode.
     This is a sync function because run_devui() runs its own event loop.
     """
