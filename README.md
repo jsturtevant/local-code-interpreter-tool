@@ -104,7 +104,7 @@ DevUI provides:
 
 ### Docker
 
-Build and run locally with Docker:
+Build and run locally with Docker. Not prefered since it requires a token from Azure openai. (Must update the .env file)
 
 ```bash
 just docker-build              # Build the container image
@@ -114,111 +114,76 @@ just docker-up                 # Build and run in one command
 
 ### Kubernetes (AKS with Workload Identity)
 
-Deploy to Azure Kubernetes Service with Azure OpenAI authentication via Workload Identity:
+Deploy to Azure Kubernetes Service with Azure OpenAI authentication via Workload Identity and Hyperlight for secure VM-isolated code execution.
+
+The deployment uses Hyperlight for secure VM-isolated code execution:
+- Hyperlight device plugin exposes `/dev/kvm` to pods
+- Pods run on KVM-enabled nodes (`kvmpool`)
+- Resource limit `hyperlight.dev/hypervisor: "1"` grants hypervisor access
 
 #### Prerequisites
-- AKS cluster with OIDC issuer and workload identity enabled
-- Azure Container Registry (ACR) attached to the cluster
-- Azure OpenAI resource deployed
+- Azure CLI installed and logged in (`az login`)
+- `kubectl` installed
 - `envsubst` installed
 
-#### Quick Deploy (existing cluster)
+#### Deploy to AKS
 
 ```bash
-# 0. (If needed) Enable workload identity on existing cluster
-just azure-aks-enable-workload-identity
-
-# 1. Get cluster credentials
-just azure-aks-get-credentials
-
-# 2. Create managed identity and federated credential
-just azure-identity-create
-export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
-## This step may be blocked on the CLI in some enviroments.  
-## Use the portal to assign "Azure AI User" the managed Identity "local-code-interpreter" on the Foundry resource
-## ex. code-interp-<username>-foundry
-just azure-identity-federate
-
-# 3. Assign Azure OpenAI access (requires specific access, might need to do manually in Portal)
-export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)  # or specify your resource name
-just azure-role-assign
-
-# 4. Set environment variables for deployment
-export IMAGE_REGISTRY_NAME="your-acr"
-export IMAGE_REGISTRY_DOMAIN="azurecr.io"
-export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
-export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
-# MANAGED_IDENTITY_CLIENT_ID already set from step 2
-
-# 5. Build and push container image (with Hyperlight support)
-just docker-build-hyperlight
-just docker-push
-
-# 6. Preview the deployment (optional)
-just k8s-dry-run hyperlight
-
-# 7. Deploy to Kubernetes with Hyperlight
-just k8s-deploy-hyperlight
-
-# 8. Port forward to access locally
-just k8s-port-forward
-```
-
-#### Deploying with Hyperlight
-
-To enable Hyperlight VM-isolated code execution instead of Python subprocess:
-
-**Step 1: Build the image with Hyperlight support**
-
-The Docker image must be built with the `WITH_HYPERLIGHT=true` build arg to include the hyperlight-nanvix library:
-
-```bash
-# Build with Hyperlight support (takes longer, includes Rust build)
-just docker-build-hyperlight
-
-# Push to registry
-just docker-push
-```
-
-**Step 2: Deploy with Hyperlight enabled**
-
-```bash
-# Deploy with Hyperlight (JavaScript is default)
-just k8s-deploy-hyperlight
-
-# Or deploy with Hyperlight Python
-just k8s-deploy-hyperlight python
-```
-
-**Note:** Hyperlight requires:
-- Docker image built with `WITH_HYPERLIGHT=true` (step 1 above)
-- Hyperlight device plugin installed on the cluster (see Full Setup below)
-- Nodes with KVM support (the `kvmpool` node pool)
-- The deployment uses `hyperlight.dev/hypervisor: "1"` resource limit via the device plugin
-
-#### Full Setup (new cluster)
-
-```bash
-# Create AKS cluster with workload identity
+# 1. Create AKS cluster with workload identity
 just azure-aks-create
 just azure-aks-get-credentials
 
-# Create Azure Container Registry
+# 2. Create Azure Container Registry and attach to AKS
 just azure-create-acr
-
-# Attach ACR to AKS (allows pulling images without imagePullSecrets)
 just azure-aks-attach-acr
 
-# Add KVM-enabled node pool for Hyperlight
+# 3. Add KVM-enabled node pool and deploy Hyperlight device plugin
 just azure-aks-deploy-kvm-pool
-
-# Deploy Hyperlight device plugin
 just azure-aks-deploy-device-plugin
+just azure-aks-plugin-status  # Verify device plugin is running
 
-# Verify device plugin is running
-just azure-aks-plugin-status
+# 4. Create managed identity and federated credential
+just azure-identity-create
+export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
+just azure-identity-federate
 
-# Then follow the Quick Deploy steps above
+# 5. Assign Azure OpenAI access to managed identity
+## Note: This step may be blocked by conditional access policies.
+## If it fails, manually assign "Cognitive Services OpenAI User" role to 
+## the "local-code-interpreter" managed identity on your Azure OpenAI resource.
+export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)
+just azure-role-assign
+
+# 6. Set environment variables for deployment
+export IMAGE_REGISTRY_NAME="your-acr"  # e.g., hyperlightacr
+export IMAGE_REGISTRY_DOMAIN="azurecr.io"
+export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
+export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
+# MANAGED_IDENTITY_CLIENT_ID already set from step 4
+
+# 7. Build and push container image with Hyperlight support
+just acr-login
+just docker-build-hyperlight
+just docker-push
+
+# 8. Deploy to Kubernetes with Hyperlight
+just k8s-deploy-hyperlight
+
+# 9. Port forward to access locally
+just k8s-port-forward
+# Access DevUI at http://localhost:8090
+```
+
+#### Hyperlight Language Options
+
+Hyperlight supports both JavaScript (default) and Python:
+
+```bash
+# Deploy with JavaScript (default)
+just k8s-deploy-hyperlight
+
+# Deploy with Python
+just k8s-deploy-hyperlight python
 ```
 
 #### Useful Commands
@@ -229,23 +194,12 @@ just k8s-status            # View deployment status
 just k8s-logs              # Tail pod logs
 just k8s-port-forward      # Port forward to localhost:8090
 just k8s-delete            # Remove all resources
-just k8s-deploy-hyperlight # Deploy with Hyperlight enabled
 
 # Azure/AKS
-just acr-login                     # Log in to Azure Container Registry
-just azure-aks-deploy-kvm-pool     # Add KVM-enabled node pool
-just azure-aks-deploy-device-plugin # Deploy Hyperlight device plugin
-just azure-aks-plugin-status       # Check device plugin status
+just acr-login                      # Log in to Azure Container Registry
+just azure-aks-plugin-status        # Check device plugin status
+just azure-aks-get-credentials      # Get kubectl credentials
 ```
-
-### Hyperlight on Kubernetes
-
-The deployment uses Hyperlight for secure code execution. Requirements:
-- Hyperlight device plugin installed on the cluster
-- Nodes with KVM support (`/dev/kvm`)
-
-The pod spec includes:
-- `hyperlight.dev/hypervisor: "1"` - Requests hypervisor access via device plugin
 
 ## Learn More
 
