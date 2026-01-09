@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/name: local-code-interpreter
     app.kubernetes.io/component: config
 data:
-  # Azure OpenAI Configuration (substituted via envsubst)
-  AZURE_OPENAI_ENDPOINT: "${AZURE_OPENAI_ENDPOINT}"
-  AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: "${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME}"
+  # Azure AI Foundry Configuration (substituted via envsubst)
+  AZURE_FOUNDRY_RESOURCE: "${AZURE_FOUNDRY_RESOURCE}"
+  AZURE_FOUNDRY_MODEL_NAME: "${AZURE_FOUNDRY_MODEL_NAME}"
   # Debug logging - set to "false" to disable debug logging for code execution
   DEBUG: "true"

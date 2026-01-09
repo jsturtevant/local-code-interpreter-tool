@@ -35,26 +35,98 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def _is_azure_configured() -> bool:
-    """Check if Azure OpenAI is configured."""
-    return bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
+def _is_azure_foundry_configured() -> bool:
+    """Check if Azure AI Foundry is configured."""
+    return bool(os.getenv("AZURE_FOUNDRY_RESOURCE"))
+
+
+def _is_azure_foundry_claude_configured() -> bool:
+    """Check if Azure Foundry Claude is configured.
+
+    Returns True if AZURE_FOUNDRY_RESOURCE is set and model name contains 'claude'.
+    """
+    resource = os.getenv("AZURE_FOUNDRY_RESOURCE")
+    model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "")
+    return bool(resource) and "claude" in model_name.lower()
+
+
+def _get_backend_name() -> str:
+    """Get the name of the configured backend."""
+    if _is_azure_foundry_claude_configured():
+        return "Azure Foundry Claude"
+    elif _is_azure_foundry_configured():
+        return "Azure Foundry OpenAI"
+    else:
+        return "OpenAI"
 
 
 def _create_chat_client():
     """Create the appropriate chat client based on environment configuration."""
-    if _is_azure_configured():
+    if _is_azure_foundry_configured():
         from agent_framework.azure import AzureOpenAIResponsesClient
 
-        # Check for API key first (local dev), then fall back to DefaultAzureCredential (Kubernetes)
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        resource = os.getenv("AZURE_FOUNDRY_RESOURCE")
+        endpoint = f"https://{resource}.openai.azure.com"
+        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "gpt-4o")
+
+        # Check for API key first (local dev), then fall back to DefaultAzureCredential
+        api_key = os.getenv("AZURE_FOUNDRY_API_KEY")
         if api_key:
-            return AzureOpenAIResponsesClient(api_key=api_key)
+            return AzureOpenAIResponsesClient(
+                api_key=api_key,
+                azure_endpoint=endpoint,
+                azure_deployment=model_name,
+            )
         else:
             from azure.identity import DefaultAzureCredential
 
-            return AzureOpenAIResponsesClient(credential=DefaultAzureCredential())
+            return AzureOpenAIResponsesClient(
+                credential=DefaultAzureCredential(),
+                azure_endpoint=endpoint,
+                azure_deployment=model_name,
+            )
     else:
         return OpenAIResponsesClient()
+
+
+def _create_anthropic_client():
+    """Create an Anthropic client for Azure Foundry Claude.
+
+    Uses AZURE_FOUNDRY_RESOURCE to construct the base URL.
+    Authenticates via API key or Microsoft Entra ID (az login).
+    """
+    from agent_framework.anthropic import AnthropicClient
+    from anthropic import AnthropicFoundry
+
+    resource = os.getenv("AZURE_FOUNDRY_RESOURCE")
+    if not resource:
+        raise ValueError("AZURE_FOUNDRY_RESOURCE environment variable not set")
+
+    base_url = f"https://{resource}.services.ai.azure.com/anthropic"
+
+    # Check for API key first (local dev), then fall back to Entra ID
+    api_key = os.getenv("AZURE_FOUNDRY_API_KEY")
+    if api_key:
+        return AnthropicClient(
+            anthropic_client=AnthropicFoundry(
+                api_key=api_key,
+                base_url=base_url,
+            )
+        )
+    else:
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+
+        return AnthropicClient(
+            anthropic_client=AnthropicFoundry(
+                azure_ad_token_provider=token_provider,
+                base_url=base_url,
+            )
+        )
 
 
 # =============================================================================
@@ -191,7 +263,8 @@ def create_interpreter_agent(
 ) -> ChatAgent:
     """Create and configure the local code interpreter agent.
 
-    Automatically uses Azure OpenAI if AZURE_OPENAI_ENDPOINT is set,
+    Automatically uses Azure Foundry Claude if AZURE_FOUNDRY_RESOURCE is set,
+    else uses Azure OpenAI if AZURE_OPENAI_ENDPOINT is set,
     otherwise uses OpenAI.
 
     Args:
@@ -226,7 +299,7 @@ def create_interpreter_agent(
     else:
         instructions = INTERPRETER_AGENT_INSTRUCTIONS_PYTHON
 
-    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    backend = _get_backend_name()
     if description is None:
         if environment == "hyperlight":
             lang = "Python" if hyperlight_language == "python" else "JavaScript"
@@ -237,20 +310,33 @@ def create_interpreter_agent(
             f"Execute {lang} code in a sandboxed {environment} environment."
         )
 
-    return ChatAgent(
-        name=name,
-        description=description,
-        chat_client=_create_chat_client(),
-        instructions=instructions,
-        tools=tools,
-        middleware=[
-            RetryOnRateLimitMiddleware(
-                max_retries=5,
-                min_wait=1.0,
-                max_wait=60.0,
-            ),
-        ],
-    )
+    if _is_azure_foundry_claude_configured():
+        # Use Anthropic client for Claude models
+        client = _create_anthropic_client()
+        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "claude-opus-4-5")
+        return client.create_agent(  # type: ignore[no-any-return]
+            name=name,
+            description=description,
+            model=model_name,
+            instructions=instructions,
+            tools=tools,
+        )
+    else:
+        # Use OpenAI-compatible client
+        return ChatAgent(
+            name=name,
+            description=description,
+            chat_client=_create_chat_client(),
+            instructions=instructions,
+            tools=tools,
+            middleware=[
+                RetryOnRateLimitMiddleware(
+                    max_retries=5,
+                    min_wait=1.0,
+                    max_wait=60.0,
+                ),
+            ],
+        )
 
 
 # =============================================================================
@@ -263,7 +349,7 @@ async def run_interactive_session(
     hyperlight_language: HyperlightLanguage = "javascript",
 ) -> None:
     """Run an interactive chat session with the interpreter agent."""
-    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    backend = _get_backend_name()
     if environment == "hyperlight":
         lang = "Python" if hyperlight_language == "python" else "JavaScript"
         env_info = f"hyperlight/{lang}"
@@ -344,7 +430,7 @@ async def run_example_queries(
     hyperlight_language: HyperlightLanguage = "javascript",
 ) -> None:
     """Run some example queries to demonstrate the agent's capabilities."""
-    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    backend = _get_backend_name()
     if environment == "hyperlight":
         lang = "Python" if hyperlight_language == "python" else "JavaScript"
         env_info = f"hyperlight/{lang}"
@@ -438,7 +524,7 @@ def run_devui(
         hyperlight_language=hyperlight_language,
     )
 
-    backend = "Azure OpenAI" if _is_azure_configured() else "OpenAI"
+    backend = _get_backend_name()
     if environment == "hyperlight":
         lang = "Python" if hyperlight_language == "python" else "JavaScript"
         env_info = f"hyperlight/{lang}"
