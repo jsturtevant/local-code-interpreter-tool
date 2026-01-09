@@ -61,7 +61,7 @@ install-nanvix:
     fi
     
     echo "🔧 Installing Rust nightly toolchain..."
-    $RUSTUP_CMD install nightly
+    "$RUSTUP_CMD" install nightly
     
     if [ ! -d "vendor/hyperlight-nanvix" ]; then
         echo "📥 Cloning hyperlight-nanvix..."
