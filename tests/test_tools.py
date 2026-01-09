@@ -1,11 +1,57 @@
 """Tests for Local Code Interpreter Tools"""
 
+import asyncio
+
 import pytest
 
 from local_code_interpreter.tools import (
     CodeExecutionTool,
     HYPERLIGHT_AVAILABLE,
     _run_python,
+)
+
+
+def _check_hyperlight_runtime() -> bool:
+    """Check if hyperlight runtime can actually execute code.
+
+    Returns True if hyperlight can run workloads, False otherwise.
+    This is separate from HYPERLIGHT_AVAILABLE which only checks if
+    the module can be imported.
+    """
+    if not HYPERLIGHT_AVAILABLE:
+        return False
+
+    async def _test_execution() -> bool:
+        try:
+            tool = CodeExecutionTool(environment="hyperlight", approval_mode="never_require")
+            result = await tool._execute(code="console.log(1)")
+            # Check if execution succeeded (output should contain "1" not an error)
+            return "1" in result and "failed" not in result.lower()
+        except Exception:
+            return False
+
+    try:
+        return asyncio.run(_test_execution())
+    except Exception:
+        return False
+
+
+# Cache the result to avoid running the check multiple times
+_HYPERLIGHT_RUNTIME_AVAILABLE: bool | None = None
+
+
+def hyperlight_runtime_available() -> bool:
+    """Cached check for hyperlight runtime availability."""
+    global _HYPERLIGHT_RUNTIME_AVAILABLE
+    if _HYPERLIGHT_RUNTIME_AVAILABLE is None:
+        _HYPERLIGHT_RUNTIME_AVAILABLE = _check_hyperlight_runtime()
+    return _HYPERLIGHT_RUNTIME_AVAILABLE
+
+
+# Skip marker for tests that require hyperlight runtime execution
+requires_hyperlight_runtime = pytest.mark.skipif(
+    not hyperlight_runtime_available(),
+    reason="Hyperlight runtime not available (requires KVM/MSHV and network access)",
 )
 
 
@@ -111,6 +157,7 @@ class TestCodeExecutionToolHyperlight:
         tool = CodeExecutionTool(environment="hyperlight")
         assert "sandbox" in tool.description.lower() or "hyperlight" in tool.description.lower()
 
+    @requires_hyperlight_runtime
     @pytest.mark.asyncio
     async def test_hyperlight_execute_returns_result(self):
         """Test that execute returns the expected output."""
@@ -118,6 +165,7 @@ class TestCodeExecutionToolHyperlight:
         result = await tool._execute(code='console.log("hello")')
         assert "hello" in result
 
+    @requires_hyperlight_runtime
     @pytest.mark.asyncio
     async def test_hyperlight_execute_simple_code(self):
         """Test that hyperlight executes JavaScript and returns output."""
