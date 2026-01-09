@@ -1,0 +1,127 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Skill Independence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude/skills/execute-code/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.claude/skills/execute-code/**'
+
+jobs:
+  # ==========================================================================
+  # Verify execute-code skill is truly standalone
+  # ==========================================================================
+  skill-independence:
+    name: Verify Skill Independence
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Set up Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo chmod 666 /dev/kvm
+
+      - name: Copy skill to isolated directory
+        run: |
+          # Create an isolated directory outside the repo
+          ISOLATED_DIR="${RUNNER_TEMP}/isolated-skill"
+          mkdir -p "$ISOLATED_DIR"
+          
+          # Copy only the skill directory
+          cp -r .claude/skills/execute-code "$ISOLATED_DIR/"
+          
+          echo "ISOLATED_SKILL_DIR=${ISOLATED_DIR}/execute-code" >> $GITHUB_ENV
+          echo "✅ Copied skill to: ${ISOLATED_DIR}/execute-code"
+          ls -la "${ISOLATED_DIR}/execute-code"
+
+      - name: Verify no repo dependencies in skill
+        run: |
+          cd "$ISOLATED_SKILL_DIR"
+          
+          echo "🔍 Checking for any references to parent repo files..."
+          
+          # Check run.py for any imports from repo modules
+          if grep -E "^from local_code_interpreter|^import local_code_interpreter" scripts/run.py 2>/dev/null; then
+            echo "❌ Found reference to local_code_interpreter module in run.py"
+            exit 1
+          fi
+          
+          # Check for any references to justfile commands or repo paths
+          if grep -E "justfile|just |\.\.\/|requirements\.txt" scripts/*.py scripts/*.sh 2>/dev/null; then
+            echo "❌ Found reference to repo files in skill scripts"
+            exit 1
+          fi
+          
+          echo "✅ No repo dependencies detected in skill scripts"
+
+      - name: Run skill setup in isolation
+        run: |
+          cd "$ISOLATED_SKILL_DIR"
+          
+          echo "📦 Running setup.sh in isolated environment..."
+          
+          # Run setup script non-interactively (auto-accept prompts)
+          # Rust is already installed by the workflow
+          bash -c 'echo "y" | ./scripts/setup.sh'
+          
+          echo "✅ Setup completed in isolation"
+
+      - name: Test skill execution
+        run: |
+          cd "$ISOLATED_SKILL_DIR"
+          
+          echo "🧪 Testing skill execution..."
+          
+          # Activate the skill's virtual environment
+          source .venv/bin/activate
+          
+          # Test JavaScript execution
+          echo "Testing JavaScript execution..."
+          RESULT=$(python3 scripts/run.py --lang javascript --code 'console.log(2 + 2);')
+          echo "JavaScript result: $RESULT"
+          if [[ "$RESULT" != *"4"* ]]; then
+            echo "❌ JavaScript execution failed"
+            exit 1
+          fi
+          echo "✅ JavaScript execution works"
+          
+          # Test Python execution
+          echo "Testing Python execution..."
+          RESULT=$(python3 scripts/run.py --lang python --code 'print(3 + 5)')
+          echo "Python result: $RESULT"
+          if [[ "$RESULT" != *"8"* ]]; then
+            echo "❌ Python execution failed"
+            exit 1
+          fi
+          echo "✅ Python execution works"
+          
+          echo ""
+          echo "🎉 All skill independence tests passed!"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Clean up isolated directory
+          rm -rf "${RUNNER_TEMP}/isolated-skill" || true
