@@ -40,3 +40,9 @@ jobs:
 
       - name: Set up Rust nightly
         uses: dtolnay/rust-toolchain@nightly
+
+      - name: Setup environment
+        run: just setup
+
+      - name: Run code quality checks
+        run: just check
