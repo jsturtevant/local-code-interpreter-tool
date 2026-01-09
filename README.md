@@ -10,7 +10,12 @@ This project uses [just](https://github.com/casey/just) as a task runner.
 Skip if using OpenAI directly or you already have an Azure OpenAI endpoint. Requires az cli and for you to be logged in.
 ```bash
 just azure-foundry-deploy
+
+## This step may be blocked on the CLI in some enviroments.  
+## Use the portal to assign "Azure AI User" to your account on the Foundry resource
+## ex. code-interp-<username>-foundry
 just azure-foundry-grant-access
+## make sure to re-login with azure cli to get new permissions
 ```
 
 ### 1. Setup (creates venv and installs dependencies):
@@ -129,6 +134,9 @@ just azure-aks-get-credentials
 # 2. Create managed identity and federated credential
 just azure-identity-create
 export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
+## This step may be blocked on the CLI in some enviroments.  
+## Use the portal to assign "Azure AI User" the managed Identity "local-code-interpreter" on the Foundry resource
+## ex. code-interp-<username>-foundry
 just azure-identity-federate
 
 # 3. Assign Azure OpenAI access (requires specific access, might need to do manually in Portal)
@@ -142,15 +150,15 @@ export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/
 export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
 # MANAGED_IDENTITY_CLIENT_ID already set from step 2
 
-# 5. Build and push container image
-just docker-build
+# 5. Build and push container image (with Hyperlight support)
+just docker-build-hyperlight
 just docker-push
 
 # 6. Preview the deployment (optional)
-just k8s-dry-run
+just k8s-dry-run hyperlight
 
-# 7. Deploy to Kubernetes
-just k8s-deploy
+# 7. Deploy to Kubernetes with Hyperlight
+just k8s-deploy-hyperlight
 
 # 8. Port forward to access locally
 just k8s-port-forward
@@ -175,12 +183,11 @@ just docker-push
 **Step 2: Deploy with Hyperlight enabled**
 
 ```bash
-# Option 1: Use the convenience command
+# Deploy with Hyperlight (JavaScript is default)
 just k8s-deploy-hyperlight
 
-# Option 2: Set the environment variable explicitly
-export ENABLE_HYPERLIGHT=true
-just k8s-deploy
+# Or deploy with Hyperlight Python
+just k8s-deploy-hyperlight python
 ```
 
 **Note:** Hyperlight requires:
@@ -194,6 +201,7 @@ just k8s-deploy
 ```bash
 # Create AKS cluster with workload identity
 just azure-aks-create
+just azure-aks-get-credentials
 
 # Create Azure Container Registry
 just azure-create-acr

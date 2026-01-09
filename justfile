@@ -337,8 +337,9 @@ k8s-logs-debug lines="200":
 # Azure configuration for AKS
 AZURE_SUBSCRIPTION := env_var_or_default("AZURE_SUBSCRIPTION", "")
 AZURE_RESOURCE_GROUP := env_var_or_default("AZURE_RESOURCE_GROUP", "local-code-interpreter-rg")
-AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "eastus")
+AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "westus3")
 AKS_CLUSTER := env_var_or_default("AKS_CLUSTER", "local-code-interpreter-aks")
+AKS_NODE_VM_SIZE := env_var_or_default("AKS_NODE_VM_SIZE", "Standard_D2s_v3")
 AZURE_OPENAI_RESOURCE := env_var_or_default("AZURE_OPENAI_RESOURCE", "")
 KVM_NODE_POOL_NAME := env_var_or_default("KVM_NODE_POOL_NAME", "kvmpool")
 MANAGED_IDENTITY_CLIENT_ID := env_var_or_default("MANAGED_IDENTITY_CLIENT_ID", "")
@@ -349,8 +350,11 @@ azure-aks-create:
         --name {{AKS_CLUSTER}} \
         --resource-group {{AZURE_RESOURCE_GROUP}} \
         --location {{AZURE_LOCATION}} \
+        --node-vm-size {{AKS_NODE_VM_SIZE}} \
+        --node-count 1 \
         --enable-oidc-issuer \
         --enable-workload-identity \
+        --ssh-access disabled \
         --generate-ssh-keys
 
 azure-aks-deploy-kvm-pool:
