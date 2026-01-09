@@ -86,13 +86,22 @@ maturin develop --features python
 ```
 
 ### "/dev/kvm not accessible"
-```bash
-# Check KVM availability
-ls -la /dev/kvm
 
-# Add user to kvm group
+The setup script automatically attempts to enable KVM access. If it fails, you can enable it manually:
+
+```bash
+# Option 1: Create udev rule for persistent access (recommended for CI/servers)
+echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger --name-match=kvm
+sudo chmod 666 /dev/kvm
+
+# Option 2: Add user to kvm group (for local development)
 sudo usermod -aG kvm $USER
 # Log out and back in for group change to take effect
+
+# Check KVM availability
+ls -la /dev/kvm
 ```
 
 ### "No output"
