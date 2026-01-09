@@ -22,13 +22,28 @@ fi
 echo "✅ Python $PYTHON_VERSION detected"
 
 # Enable KVM support (required for Hyperlight)
+# Note: This sets mode 0666 which allows any user to access KVM.
+# For production systems, consider using group-based access control instead.
 enable_kvm() {
     echo "🔧 Enabling KVM access..."
-    echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
-    sudo udevadm control --reload-rules
-    sudo udevadm trigger --name-match=kvm
-    sudo chmod 666 /dev/kvm
+    if ! echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules; then
+        echo "❌ Failed to create udev rule"
+        return 1
+    fi
+    if ! sudo udevadm control --reload-rules; then
+        echo "❌ Failed to reload udev rules"
+        return 1
+    fi
+    if ! sudo udevadm trigger --name-match=kvm; then
+        echo "❌ Failed to trigger udev"
+        return 1
+    fi
+    if ! sudo chmod 666 /dev/kvm; then
+        echo "❌ Failed to chmod /dev/kvm"
+        return 1
+    fi
     echo "✅ KVM access enabled"
+    return 0
 }
 
 # Check for KVM support and enable if needed
