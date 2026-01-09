@@ -40,6 +40,9 @@ install-nanvix:
     #!/usr/bin/env bash
     set -euo pipefail
     
+    # Store the project root directory
+    PROJECT_ROOT="$(pwd)"
+    
     # Check venv exists
     if [ ! -d .venv ]; then
         echo '❌ Virtual environment not found. Run: just setup'
@@ -66,12 +69,11 @@ install-nanvix:
         git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix
     else
         echo "📥 Updating hyperlight-nanvix..."
-        cd vendor/hyperlight-nanvix && git pull
-        cd ../..
+        (cd vendor/hyperlight-nanvix && git pull)
     fi
     
     . .venv/bin/activate && pip install maturin
-    cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
+    (cd vendor/hyperlight-nanvix && VIRTUAL_ENV="${PROJECT_ROOT}/.venv" maturin develop --features python)
     echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
