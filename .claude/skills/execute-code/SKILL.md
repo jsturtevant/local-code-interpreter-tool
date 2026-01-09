@@ -7,11 +7,14 @@ description: Execute JavaScript or Python code in a secure Hyperlight VM sandbox
 
 Execute JavaScript or Python code in a secure Hyperlight VM sandbox with full isolation.
 
+This skill is **standalone and shareable** - it can be copied to any `.claude/skills/` directory and works independently of the original repository.
+
 ## Requirements
 
 - Linux with KVM support (`/dev/kvm`)
 - Python 3.8+
-- `hyperlight-nanvix` package
+- Git (for cloning hyperlight-nanvix)
+- Rust toolchain (installed automatically by setup script)
 
 ## When to Use
 
@@ -19,6 +22,36 @@ Use this skill when:
 - The user asks to run, execute, or test code
 - You need to verify calculations or algorithm correctness
 - You want to demonstrate code behavior with actual output
+
+## Standalone Installation
+
+To use this skill in a new project or share it with others:
+
+### 1. Copy the Skill
+```bash
+# Copy the entire execute-code directory to your project
+cp -r /path/to/execute-code ~/.claude/skills/
+# Or for project-specific use:
+cp -r /path/to/execute-code /your/project/.claude/skills/
+```
+
+### 2. Run Setup
+```bash
+cd ~/.claude/skills/execute-code
+./scripts/setup.sh
+```
+
+The setup script will:
+- Create a virtual environment in `.venv`
+- Install Rust nightly toolchain (if not present)
+- Clone and build `hyperlight-nanvix` from source
+- Configure everything for standalone use
+
+### 3. Activate and Use
+```bash
+source .venv/bin/activate
+python3 scripts/run.py --lang javascript --code 'console.log("Hello!");'
+```
 
 ## Quick Start
 
@@ -37,7 +70,7 @@ python3 scripts/run.py --lang python --code 'print(2 + 2)'
 - **JavaScript**: Use `console.log()` to see output
 - **Python**: Use `print()` to see output
 - Code runs in VM-isolated sandbox (hyperlight-nanvix)
-- The script is self-contained - only requires `hyperlight-nanvix`
+- The skill is self-contained with its own virtual environment
 
 ## Examples
 
@@ -62,20 +95,40 @@ print(f"Primes under 50: {primes}")
 python3 scripts/run.py --lang python --file my_script.py
 ```
 
-## Installation
+## Manual Installation (Alternative)
+
+If you prefer to install dependencies manually:
 
 ```bash
-# Option 1: Install from PyPI (when available)
-pip install hyperlight-nanvix
+# 1. Install Rust nightly
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup install nightly
 
-# Option 2: Build from source
+# 2. Clone and build hyperlight-nanvix
 git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git
 cd hyperlight-nanvix
 pip install maturin
 maturin develop --features python
 ```
 
+## Directory Structure
+
+When installed standalone, the skill has this structure:
+
+```
+execute-code/
+├── SKILL.md           # This file
+├── REFERENCE.md       # Detailed API reference
+├── scripts/
+│   ├── run.py         # Main execution script
+│   └── setup.sh       # Automated setup script
+├── .venv/             # Virtual environment (created by setup)
+└── vendor/            # hyperlight-nanvix source (created by setup)
+    └── hyperlight-nanvix/
+```
+
 ## See Also
 
 - `REFERENCE.md` - Detailed API and configuration options
 - `scripts/run.py` - The self-contained execution script
+- `scripts/setup.sh` - Automated setup for standalone use
