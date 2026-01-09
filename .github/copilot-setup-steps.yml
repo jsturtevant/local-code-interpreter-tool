@@ -27,3 +27,6 @@ jobs:
 
       - name: Setup environment
         run: just setup
+
+      - name: Run code quality checks
+        run: just check
