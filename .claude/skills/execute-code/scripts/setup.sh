@@ -28,29 +28,12 @@ elif [ -e /dev/kvm ]; then
     # KVM device exists but is not accessible
     echo "❌ Error: /dev/kvm exists but is not accessible."
     echo ""
-    echo "   To enable KVM access, run one of the following options:"
-    echo ""
-    echo "   Option 1: For CI/servers (grants access to all users)"
-    echo "     echo 'KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules"
-    echo "     sudo udevadm control --reload-rules"
-    echo "     sudo udevadm trigger --name-match=kvm"
-    echo "     sudo chmod 666 /dev/kvm"
-    echo ""
-    echo "   Option 2: For local development (add your user to the kvm group)"
-    echo "     sudo usermod -aG kvm \$USER"
-    echo "     # Then log out and back in for the group change to take effect"
-    echo ""
-    echo "   After enabling KVM access, re-run this setup script."
+    echo "   Please see REFERENCE.md for instructions on enabling KVM access."
     exit 1
 else
     echo "❌ Error: /dev/kvm not found. Hyperlight requires KVM support."
     echo ""
-    echo "   KVM (Kernel-based Virtual Machine) is required for Hyperlight to run."
-    echo "   Please ensure your system supports hardware virtualization and that"
-    echo "   the KVM kernel module is loaded."
-    echo ""
-    echo "   For more information, see:"
-    echo "     https://github.com/hyperlight-dev/hyperlight-nanvix#requirements"
+    echo "   Please see REFERENCE.md for KVM requirements and setup instructions."
     exit 1
 fi
 
