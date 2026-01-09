@@ -37,25 +37,42 @@ install-dev:
 
 # Install hyperlight-nanvix Python bindings (requires Rust nightly toolchain)
 install-nanvix:
-    @{{check-venv}}
-    @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
-        echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
-        exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    # Check venv exists
+    if [ ! -d .venv ]; then
+        echo '❌ Virtual environment not found. Run: just setup'
+        exit 1
     fi
-    @echo "🔧 Installing Rust nightly toolchain..."
+    
+    echo "📦 Installing hyperlight-nanvix Python bindings..."
+    
+    # Ensure cargo bin is in PATH
+    export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+    
+    # Check for rustup
+    if ! command -v rustup &> /dev/null; then
+        echo "❌ rustup not found. Please install Rust: https://rustup.rs"
+        exit 1
+    fi
+    
+    echo "🔧 Installing Rust nightly toolchain..."
     rustup install nightly
-    @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
-        echo "📥 Cloning hyperlight-nanvix..."; \
-        mkdir -p vendor; \
-        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix; \
-    else \
-        echo "📥 Updating hyperlight-nanvix..."; \
-        cd vendor/hyperlight-nanvix && git pull; \
+    
+    if [ ! -d "vendor/hyperlight-nanvix" ]; then
+        echo "📥 Cloning hyperlight-nanvix..."
+        mkdir -p vendor
+        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix
+    else
+        echo "📥 Updating hyperlight-nanvix..."
+        cd vendor/hyperlight-nanvix && git pull
+        cd ../..
     fi
-    {{venv}} pip install maturin
+    
+    . .venv/bin/activate && pip install maturin
     cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
-    @echo "✅ hyperlight-nanvix installed successfully"
+    echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
 update:
