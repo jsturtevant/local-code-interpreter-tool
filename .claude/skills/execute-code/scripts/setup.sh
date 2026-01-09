@@ -43,12 +43,22 @@ pip install --upgrade pip
 
 # Check for Rust/Cargo (required for building hyperlight-nanvix)
 if ! command -v rustup &> /dev/null && [ ! -x "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" ]; then
-    echo "📦 Rust not found. Installing Rust..."
+    echo "📦 Rust not found."
+    echo "⚠️  This script will download and install Rust from https://rustup.rs"
+    echo "   For manual installation, visit: https://www.rust-lang.org/tools/install"
+    read -p "   Continue with automatic installation? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Rust is required. Please install Rust manually and re-run this script."
+        exit 1
+    fi
+    echo "📦 Installing Rust from https://rustup.rs..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source "${CARGO_HOME:-$HOME/.cargo}/env"
 fi
 
 # Install Rust nightly (required for hyperlight-nanvix)
+# Note: hyperlight-nanvix may have a rust-toolchain.toml that pins the exact version
 echo "🔧 Installing Rust nightly toolchain..."
 "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" install nightly
 
@@ -68,7 +78,19 @@ fi
 # Install maturin and build hyperlight-nanvix
 echo "🔧 Building hyperlight-nanvix Python bindings..."
 pip install maturin
-cd "$HYPERLIGHT_DIR" && VIRTUAL_ENV="$VENV_DIR" maturin develop --features python
+
+cd "$HYPERLIGHT_DIR"
+if ! VIRTUAL_ENV="$VENV_DIR" maturin develop --features python; then
+    echo ""
+    echo "❌ Failed to build hyperlight-nanvix."
+    echo "   Common issues:"
+    echo "   - Missing Rust nightly toolchain: rustup install nightly"
+    echo "   - Missing build dependencies: check hyperlight-nanvix README"
+    echo "   - KVM not available: required for runtime, not build"
+    echo ""
+    echo "   For help, see: https://github.com/hyperlight-dev/hyperlight-nanvix"
+    exit 1
+fi
 
 echo ""
 echo "✅ Setup complete!"
