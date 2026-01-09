@@ -1,0 +1,106 @@
+---
+# Namespace for Hyperlight components
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hyperlight-system
+  labels:
+    app.kubernetes.io/name: hyperlight-system
+    app.kubernetes.io/part-of: hyperlight
+
+---
+# ServiceAccount for device plugin
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hyperlight-device-plugin
+  namespace: hyperlight-system
+  labels:
+    app.kubernetes.io/name: hyperlight-device-plugin
+    app.kubernetes.io/part-of: hyperlight
+
+---
+# DaemonSet for Hyperlight Device Plugin
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hyperlight-device-plugin
+  namespace: hyperlight-system
+  labels:
+    app.kubernetes.io/name: hyperlight-device-plugin
+    app.kubernetes.io/part-of: hyperlight
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hyperlight-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hyperlight-device-plugin
+        app.kubernetes.io/part-of: hyperlight
+    spec:
+      serviceAccountName: hyperlight-device-plugin
+      # Only run on nodes with hyperlight enabled
+      nodeSelector:
+        hyperlight.dev/enabled: "true"
+      priorityClassName: system-node-critical
+      containers:
+        - name: device-plugin
+          image: ghcr.io/hyperlight-dev/hyperlight-device-plugin:30a56f2
+          imagePullPolicy: Always
+          env:
+            - name: DEVICE_COUNT
+              value: "2000"
+            # UID/GID for device node inside containers (should match pod's runAsUser)
+            - name: DEVICE_UID
+              value: "1000"
+            - name: DEVICE_GID
+              value: "1000"
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsUser: 0  # Required: write access to /var/run/cdi and /var/lib/kubelet/device-plugins
+          volumeMounts:
+            # Kubelet device plugin socket directory
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            # CDI spec directory
+            - name: cdi
+              mountPath: /var/run/cdi
+            # Host /dev to detect hypervisor device
+            - name: dev
+              mountPath: /dev
+              readOnly: true
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+          livenessProbe:
+            exec:
+              command:
+                - test
+                - -S
+                - /var/lib/kubelet/device-plugins/hyperlight.sock
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+            type: Directory
+        - name: cdi
+          hostPath:
+            path: /var/run/cdi
+            type: DirectoryOrCreate
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
+      terminationGracePeriodSeconds: 30

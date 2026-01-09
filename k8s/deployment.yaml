@@ -18,10 +18,8 @@ spec:
         # Azure Workload Identity: Enable token projection
         azure.workload.identity/use: "true"
     spec:
-      # Hyperlight runtime class for KVM-based isolation
-      # Use "hyperlight-mshv" for Hyper-V based isolation
-      runtimeClassName: hyperlight-kvm
-      
+      nodeSelector:
+        hyperlight.dev/hypervisor: kvm
       # Required for workload identity token projection
       automountServiceAccountToken: true
       serviceAccountName: local-code-interpreter
@@ -36,7 +34,7 @@ spec:
       
       containers:
         - name: app
-          image: ${IMAGE_REGISTRY}/local-code-interpreter:${IMAGE_TAG}
+          image: ${IMAGE_REGISTRY_NAME}.${IMAGE_REGISTRY_DOMAIN}/local-code-interpreter:${IMAGE_TAG}
           imagePullPolicy: Always
           # Optional 
           #args: --hyperlight [python|javascript]

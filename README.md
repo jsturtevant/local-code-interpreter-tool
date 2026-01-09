@@ -1,6 +1,6 @@
 # Local Code Interpreter Tool
 
-A local code interpreter tool built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework).
+A local code interpreter tool built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework). It supports safe, sandboxed execution of code locally or in Kubernetes (AKS) using Hyperlight VM isolation.
 
 ## Quick Start
 
@@ -10,7 +10,12 @@ This project uses [just](https://github.com/casey/just) as a task runner.
 Skip if using OpenAI directly or you already have an Azure OpenAI endpoint. Requires az cli and for you to be logged in.
 ```bash
 just azure-foundry-deploy
+
+## This step may be blocked on the CLI in some enviroments.  
+## Use the portal to assign "Azure AI User" to your account on the Foundry resource
+## ex. code-interp-<username>-foundry
 just azure-foundry-grant-access
+## make sure to re-login with azure cli to get new permissions
 ```
 
 ### 1. Setup (creates venv and installs dependencies):
@@ -21,7 +26,7 @@ just setup
 ### 2. Configure your environment:
 ```bash
 cp .env.example .env
-# Edit .env with your OpenAI API key or Azure OpenAI configuration
+# Edit .env with your OpenAI API key or Azure AI Foundry (Azure OpenAI) configuration
 ```
 
 ### 3. Run the agent:
@@ -33,7 +38,7 @@ just devui            # Launch DevUI web interface
 
 ### Available Commands
 
-Run `just` to see all available commands
+Run `just` to see all available commands.
 
 ## Execution Environments
 
@@ -51,8 +56,8 @@ just interactive      # Interactive mode with python
 VM-isolated sandbox using [hyperlight-nanvix](https://github.com/hyperlight-dev/hyperlight-nanvix) for untrusted code execution. Supports JavaScript, Python, C, and C++.
 
 ```bash
-just run --hyperlight         # Demo mode with hyperlight
-just interactive --hyperlight # Interactive mode with hyperlight
+just run hyperlight         # Demo mode with hyperlight
+just interactive hyperlight # Interactive mode with hyperlight
 ```
 
 **Note:** Hyperlight requires:
@@ -61,7 +66,7 @@ just interactive --hyperlight # Interactive mode with hyperlight
 
 #### Building Hyperlight
 
-Hyperlight is automatically built and installed when you run `just setup`. This requires Rust and maturin to be installed on your system.
+Hyperlight Python bindings are automatically built and installed during `just setup`. Ensure Rust toolchain and `maturin` are available on your system.
 
 ## Configuration
 
@@ -72,7 +77,7 @@ OPENAI_API_KEY="your-api-key"
 OPENAI_RESPONSES_MODEL_ID="gpt-4o-mini"
 ```
 
-### Option 2: Azure OpenAI
+### Option 2: Azure AI Foundry (Azure OpenAI)
 Set in your `.env` file:
 ```
 AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
@@ -85,10 +90,9 @@ Then authenticate with `az login` before running.
 The project includes a web-based interface for testing and debugging using [Agent Framework DevUI](https://github.com/microsoft/agent-framework/tree/main/python/packages/devui):
 
 ```bash
-just devui                     # Launch DevUI on http://localhost:8090
-just devui --port=8080         # Custom port
-just devui --hyperlight        # Use hyperlight environment
-just devui --no-browser        # Don't auto-open browser
+just devui                       # Launch DevUI on http://localhost:8090
+just devui hyperlight            # Use hyperlight environment
+just devui hyperlight javascript # Use hyperlight with JavaScript code execution
 ```
 
 DevUI provides:
@@ -100,123 +104,108 @@ DevUI provides:
 
 ### Docker
 
-Build and run locally with Docker:
+Use Docker for local testing when you prefer a containerized runtime. Provide credentials via `.env`:
+- OpenAI: set `OPENAI_API_KEY`
+- Azure AI Foundry: set `AZURE_OPENAI_API_KEY` or authenticate with `az login` when running in AKS
 
 ```bash
 just docker-build              # Build the container image
-just docker-run                # Run with .env file for Azure auth
+just docker-run                # Run with .env for OpenAI/Azure credentials
 just docker-up                 # Build and run in one command
 ```
 
 ### Kubernetes (AKS with Workload Identity)
 
-Deploy to Azure Kubernetes Service with Azure OpenAI authentication via Workload Identity:
+Deploy to Azure Kubernetes Service with Azure OpenAI authentication via Workload Identity and Hyperlight for secure VM-isolated code execution.
+
+The deployment uses Hyperlight for secure VM-isolated code execution:
+- Hyperlight device plugin exposes `/dev/kvm` to pods
+- Pods run on KVM-enabled nodes (`kvmpool`)
+- Resource limit `hyperlight.dev/hypervisor: "1"` grants hypervisor access
 
 #### Prerequisites
-- AKS cluster with OIDC issuer and workload identity enabled
-- Azure Container Registry (ACR) attached to the cluster
-- Azure OpenAI resource deployed
+- Azure CLI installed and logged in (`az login`)
+- `kubectl` installed
 - `envsubst` installed
 
-#### Quick Deploy (existing cluster)
+#### Deploy to AKS
 
 ```bash
-# 0. (If needed) Enable workload identity on existing cluster
-just azure-aks-enable-workload-identity
-
-# 1. Get cluster credentials
+# 1. Create AKS cluster with workload identity
+just azure-aks-create
 just azure-aks-get-credentials
 
-# 2. Create managed identity and federated credential
+# 2. Create Azure Container Registry and attach to AKS
+just azure-create-acr
+just azure-aks-attach-acr
+
+# 3. Add KVM-enabled node pool and deploy Hyperlight device plugin
+just azure-aks-deploy-kvm-pool
+just azure-aks-deploy-device-plugin
+just azure-aks-plugin-status  # Verify device plugin is running
+
+# 4. Create managed identity and federated credential
 just azure-identity-create
 export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
 just azure-identity-federate
 
-# 3. Assign Azure OpenAI access (requires specific access, might need to do manually in Portal)
-export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)  # or specify your resource name
+# 5. Assign Azure OpenAI access to managed identity
+## Note: This step may be blocked by conditional access policies.
+## If it fails, manually assign "Cognitive Services OpenAI User" role to 
+## the "local-code-interpreter" managed identity on your Azure OpenAI resource.
+export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)
 just azure-role-assign
 
-# 4. Set environment variables for deployment
-export IMAGE_REGISTRY="your-acr.azurecr.io"
+# 6. Set environment variables for deployment
+export IMAGE_REGISTRY_NAME="your-acr"  # e.g., hyperlightacr
+export IMAGE_REGISTRY_DOMAIN="azurecr.io"
 export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
 export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
-# MANAGED_IDENTITY_CLIENT_ID already set from step 2
+# MANAGED_IDENTITY_CLIENT_ID already set from step 4
 
-# 5. Build and push container image
-just docker-build
-just docker-push
-
-# 6. Preview the deployment (optional)
-just k8s-dry-run
-
-# 7. Deploy to Kubernetes
-just k8s-deploy
-
-# 8. Port forward to access locally
-just k8s-port-forward
-```
-
-#### Deploying with Hyperlight
-
-To enable Hyperlight VM-isolated code execution instead of Python subprocess:
-
-**Step 1: Build the image with Hyperlight support**
-
-The Docker image must be built with the `WITH_HYPERLIGHT=true` build arg to include the hyperlight-nanvix library:
-
-```bash
-# Build with Hyperlight support (takes longer, includes Rust build)
+# 7. Build and push container image with Hyperlight support
+just acr-login
 just docker-build-hyperlight
-
-# Push to registry
 just docker-push
-```
 
-**Step 2: Deploy with Hyperlight enabled**
-
-```bash
-# Option 1: Use the convenience command
+# 8. Deploy to Kubernetes with Hyperlight
 just k8s-deploy-hyperlight
 
-# Option 2: Set the environment variable explicitly
-export ENABLE_HYPERLIGHT=true
-just k8s-deploy
+# 9. Port forward to access locally
+just k8s-port-forward
+# Access DevUI at http://localhost:8090
 ```
 
-**Note:** Hyperlight requires:
-- Docker image built with `WITH_HYPERLIGHT=true` (step 1 above)
-- Hyperlight device plugin installed on the cluster
-- Nodes with KVM support (the `kvmpool` node pool)
-- The deployment already includes `runtimeClassName: hyperlight-kvm` and `hyperlight.dev/hypervisor: "1"` resource limit
+#### Hyperlight Language Options
 
-#### Full Setup (new cluster)
+Hyperlight supports both JavaScript (default) and Python:
 
 ```bash
-# Create AKS cluster with workload identity
-just azure-aks-create
+# Deploy with JavaScript (default)
+just k8s-deploy-hyperlight
 
-# Then follow the Quick Deploy steps above
+# Deploy with Python
+just k8s-deploy-hyperlight python
 ```
 
 #### Useful Commands
 
 ```bash
+# Kubernetes
 just k8s-status            # View deployment status
 just k8s-logs              # Tail pod logs
 just k8s-port-forward      # Port forward to localhost:8090
 just k8s-delete            # Remove all resources
-just k8s-deploy-hyperlight # Deploy with Hyperlight enabled
+
+# Azure/AKS
+just acr-login                      # Log in to Azure Container Registry
+just azure-aks-plugin-status        # Check device plugin status
+just azure-aks-get-credentials      # Get kubectl credentials
 ```
 
-### Hyperlight on Kubernetes
-
-The deployment uses Hyperlight for secure code execution. Requirements:
-- Hyperlight device plugin installed on the cluster
-- Nodes with KVM support (`/dev/kvm`)
-
-The pod spec includes:
-- `runtimeClassName: hyperlight-kvm` - Uses Hyperlight runtime
-- `hyperlight.dev/hypervisor: "1"` - Requests hypervisor access via device plugin
+## Troubleshooting
+- Azure permissions: If CLI deployment fails, assign the “Azure AI User” role to your account on the Foundry resource in the portal, then run `az login` again.
+- AKS device plugin: Use `just azure-aks-plugin-status` to confirm Hyperlight device plugin is ready and nodes in `kvmpool` advertise KVM.
 
 ## Learn More
 
@@ -226,4 +215,4 @@ The pod spec includes:
 
 ## Azure OpenAI Infrastructure
 
-For provisioning Azure OpenAI via Bicep and deployment instructions, see infra/README.md.
+For provisioning Azure AI Foundry (Azure OpenAI) via Bicep and deployment instructions, see infra/README.md.

@@ -34,7 +34,6 @@ Create `k8s/` directory with:
 
 ```yaml
 spec:
-  runtimeClassName: hyperlight-kvm  # or hyperlight-mshv
   automountServiceAccountToken: true  # Required for workload identity
   serviceAccountName: local-code-interpreter
   securityContext:
