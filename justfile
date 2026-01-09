@@ -68,7 +68,7 @@ install-nanvix:
         git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix
     else
         echo "📥 Updating hyperlight-nanvix..."
-        (cd vendor/hyperlight-nanvix && git pull)
+        (cd vendor/hyperlight-nanvix && git pull --ff-only)
     fi
     
     # Activate venv and install maturin
