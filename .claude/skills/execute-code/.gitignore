@@ -1,0 +1,13 @@
+# Virtual environment created by setup.sh
+.venv/
+
+# Vendor directory with hyperlight-nanvix source
+vendor/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary files
+*.tmp
