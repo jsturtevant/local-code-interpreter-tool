@@ -1,6 +1,6 @@
 # Local Code Interpreter Tool
 
-A local code interpreter tool built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework).
+A local code interpreter tool built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework). It supports safe, sandboxed execution of code locally or in Kubernetes (AKS) using Hyperlight VM isolation.
 
 ## Quick Start
 
@@ -26,7 +26,7 @@ just setup
 ### 2. Configure your environment:
 ```bash
 cp .env.example .env
-# Edit .env with your OpenAI API key or Azure OpenAI configuration
+# Edit .env with your OpenAI API key or Azure AI Foundry (Azure OpenAI) configuration
 ```
 
 ### 3. Run the agent:
@@ -38,7 +38,7 @@ just devui            # Launch DevUI web interface
 
 ### Available Commands
 
-Run `just` to see all available commands
+Run `just` to see all available commands.
 
 ## Execution Environments
 
@@ -66,7 +66,7 @@ just interactive hyperlight # Interactive mode with hyperlight
 
 #### Building Hyperlight
 
-Hyperlight is automatically built and installed when you run `just setup`. This requires Rust and maturin to be installed on your system.
+Hyperlight Python bindings are automatically built and installed during `just setup`. Ensure Rust toolchain and `maturin` are available on your system.
 
 ## Configuration
 
@@ -77,7 +77,7 @@ OPENAI_API_KEY="your-api-key"
 OPENAI_RESPONSES_MODEL_ID="gpt-4o-mini"
 ```
 
-### Option 2: Azure OpenAI
+### Option 2: Azure AI Foundry (Azure OpenAI)
 Set in your `.env` file:
 ```
 AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
@@ -104,11 +104,13 @@ DevUI provides:
 
 ### Docker
 
-Build and run locally with Docker. Not prefered since it requires a token from Azure openai. (Must update the .env file)
+Use Docker for local testing when you prefer a containerized runtime. Provide credentials via `.env`:
+- OpenAI: set `OPENAI_API_KEY`
+- Azure AI Foundry: set `AZURE_OPENAI_API_KEY` or authenticate with `az login` when running in AKS
 
 ```bash
 just docker-build              # Build the container image
-just docker-run                # Run with .env file for Azure auth
+just docker-run                # Run with .env for OpenAI/Azure credentials
 just docker-up                 # Build and run in one command
 ```
 
@@ -201,6 +203,10 @@ just azure-aks-plugin-status        # Check device plugin status
 just azure-aks-get-credentials      # Get kubectl credentials
 ```
 
+## Troubleshooting
+- Azure permissions: If CLI deployment fails, assign the “Azure AI User” role to your account on the Foundry resource in the portal, then run `az login` again.
+- AKS device plugin: Use `just azure-aks-plugin-status` to confirm Hyperlight device plugin is ready and nodes in `kvmpool` advertise KVM.
+
 ## Learn More
 
 - [Microsoft Agent Framework Documentation](https://learn.microsoft.com/en-us/agent-framework/)
@@ -209,4 +215,4 @@ just azure-aks-get-credentials      # Get kubectl credentials
 
 ## Azure OpenAI Infrastructure
 
-For provisioning Azure OpenAI via Bicep and deployment instructions, see infra/README.md.
+For provisioning Azure AI Foundry (Azure OpenAI) via Bicep and deployment instructions, see infra/README.md.
