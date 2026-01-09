@@ -21,8 +21,35 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" 
 fi
 echo "✅ Python $PYTHON_VERSION detected"
 
-# Check for KVM support (required for Hyperlight)
-if [ ! -e /dev/kvm ]; then
+# Enable KVM support (required for Hyperlight)
+enable_kvm() {
+    echo "🔧 Enabling KVM access..."
+    echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --name-match=kvm
+    sudo chmod 666 /dev/kvm
+    echo "✅ KVM access enabled"
+}
+
+# Check for KVM support and enable if needed
+if [ -e /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+    echo "✅ KVM is available and accessible"
+elif [ -e /dev/kvm ]; then
+    # KVM device exists but not accessible
+    echo "⚠️  /dev/kvm exists but is not accessible"
+    if command -v sudo &> /dev/null; then
+        echo "🔧 Attempting to enable KVM access with sudo..."
+        if enable_kvm; then
+            echo "✅ KVM access enabled successfully"
+        else
+            echo "⚠️  Failed to enable KVM access. You may need to run manually:"
+            echo "   sudo chmod 666 /dev/kvm"
+        fi
+    else
+        echo "⚠️  sudo not available. Please enable KVM access manually:"
+        echo "   sudo chmod 666 /dev/kvm"
+    fi
+else
     echo "⚠️  Warning: /dev/kvm not found. Hyperlight requires KVM support."
     echo "   The skill will still be installed, but code execution will fail without KVM."
     echo "   See: https://github.com/hyperlight-dev/hyperlight-nanvix#requirements"

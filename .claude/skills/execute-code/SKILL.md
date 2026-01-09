@@ -42,6 +42,7 @@ cd ~/.claude/skills/execute-code
 ```
 
 The setup script will:
+- Enable KVM access (if sudo is available and `/dev/kvm` is not accessible)
 - Create a virtual environment in `.venv`
 - Install Rust nightly toolchain (if not present)
 - Clone and build `hyperlight-nanvix` from source
