@@ -39,7 +39,7 @@ install-dev:
 install-nanvix:
     @{{check-venv}}
     @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
+    @if ! command -v rustup > /dev/null 2>&1; then \
         echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
         exit 1; \
     fi
