@@ -21,53 +21,37 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" 
 fi
 echo "✅ Python $PYTHON_VERSION detected"
 
-# Enable KVM support (required for Hyperlight)
-# Note: This sets mode 0666 which allows any user to access KVM.
-# For production systems, consider using group-based access control instead.
-enable_kvm() {
-    echo "🔧 Enabling KVM access..."
-    if ! echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules; then
-        echo "❌ Failed to create udev rule"
-        return 1
-    fi
-    if ! sudo udevadm control --reload-rules; then
-        echo "❌ Failed to reload udev rules"
-        return 1
-    fi
-    if ! sudo udevadm trigger --name-match=kvm; then
-        echo "❌ Failed to trigger udev"
-        return 1
-    fi
-    if ! sudo chmod 666 /dev/kvm; then
-        echo "❌ Failed to chmod /dev/kvm"
-        return 1
-    fi
-    echo "✅ KVM access enabled"
-    return 0
-}
-
-# Check for KVM support and enable if needed
+# Check for KVM support (required for Hyperlight)
 if [ -e /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     echo "✅ KVM is available and accessible"
 elif [ -e /dev/kvm ]; then
-    # KVM device exists but not accessible
-    echo "⚠️  /dev/kvm exists but is not accessible"
-    if command -v sudo &> /dev/null; then
-        echo "🔧 Attempting to enable KVM access with sudo..."
-        if enable_kvm; then
-            echo "✅ KVM access enabled successfully"
-        else
-            echo "⚠️  Failed to enable KVM access. You may need to run manually:"
-            echo "   sudo chmod 666 /dev/kvm"
-        fi
-    else
-        echo "⚠️  sudo not available. Please enable KVM access manually:"
-        echo "   sudo chmod 666 /dev/kvm"
-    fi
+    # KVM device exists but is not accessible
+    echo "❌ Error: /dev/kvm exists but is not accessible."
+    echo ""
+    echo "   To enable KVM access, run one of the following options:"
+    echo ""
+    echo "   Option 1: For CI/servers (grants access to all users)"
+    echo "     echo 'KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules"
+    echo "     sudo udevadm control --reload-rules"
+    echo "     sudo udevadm trigger --name-match=kvm"
+    echo "     sudo chmod 666 /dev/kvm"
+    echo ""
+    echo "   Option 2: For local development (add your user to the kvm group)"
+    echo "     sudo usermod -aG kvm \$USER"
+    echo "     # Then log out and back in for the group change to take effect"
+    echo ""
+    echo "   After enabling KVM access, re-run this setup script."
+    exit 1
 else
-    echo "⚠️  Warning: /dev/kvm not found. Hyperlight requires KVM support."
-    echo "   The skill will still be installed, but code execution will fail without KVM."
-    echo "   See: https://github.com/hyperlight-dev/hyperlight-nanvix#requirements"
+    echo "❌ Error: /dev/kvm not found. Hyperlight requires KVM support."
+    echo ""
+    echo "   KVM (Kernel-based Virtual Machine) is required for Hyperlight to run."
+    echo "   Please ensure your system supports hardware virtualization and that"
+    echo "   the KVM kernel module is loaded."
+    echo ""
+    echo "   For more information, see:"
+    echo "     https://github.com/hyperlight-dev/hyperlight-nanvix#requirements"
+    exit 1
 fi
 
 # Create virtual environment if it doesn't exist
