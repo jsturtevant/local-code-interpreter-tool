@@ -39,12 +39,12 @@ install-dev:
 install-nanvix:
     @{{check-venv}}
     @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
+    @if ! command -v rustup &> /dev/null && [ ! -x "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" ]; then \
         echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
         exit 1; \
     fi
     @echo "🔧 Installing Rust nightly toolchain..."
-    rustup install nightly
+    "${CARGO_HOME:-$HOME/.cargo}/bin/rustup" install nightly
     @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
         echo "📥 Cloning hyperlight-nanvix..."; \
         mkdir -p vendor; \
