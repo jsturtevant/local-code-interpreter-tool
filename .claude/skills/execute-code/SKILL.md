@@ -1,3 +1,8 @@
+---
+name: execute-code
+description: Execute JavaScript or Python code in a secure Hyperlight VM sandbox with full isolation. Use this when users request running code, performing calculations, testing algorithms, or demonstrating code behavior with actual output.
+---
+
 # Execute Code Skill
 
 Execute JavaScript or Python code in a secure Hyperlight VM sandbox with full isolation.
