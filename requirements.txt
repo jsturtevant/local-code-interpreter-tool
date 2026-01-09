@@ -2,6 +2,10 @@
 agent-framework
 agent-framework-devui
 
+# Anthropic support for Azure Foundry Claude
+agent-framework-anthropic
+anthropic>=0.74.0
+
 # Common dependencies
 python-dotenv
 pydantic

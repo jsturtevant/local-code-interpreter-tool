@@ -26,6 +26,9 @@ setup:
     fi
     python3 -m venv .venv
     {{venv}} pip install --upgrade pip
+    # Use --pre because some core dependencies (e.g., agent-framework-anthropic)
+    # currently require pre-release versions. Note: this allows pre-releases for
+    # all packages in requirements.txt, which is an intentional project choice.
     {{venv}} pip install --pre -r requirements.txt
     {{venv}} pip install -r requirements-dev.txt
     {{venv}} pip install -e .
@@ -227,8 +230,8 @@ K8S_SERVICE_ACCOUNT := "local-code-interpreter"
 # - IMAGE_REGISTRY_DOMAIN: Container registry domain (e.g., azurecr.io)
 # - IMAGE_TAG: Image tag (default: latest)
 # - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
-# - AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
-# - AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME: Model deployment name
+# - AZURE_FOUNDRY_RESOURCE: Azure AI Foundry resource name
+# - AZURE_FOUNDRY_MODEL_NAME: Model deployment name (gpt-4o, claude-opus-4-5, etc.)
 
 # Deploy to Kubernetes using kustomize + envsubst for variable substitution
 # Usage: just k8s-deploy [env] [lang]
@@ -241,7 +244,7 @@ k8s-deploy env="" lang="javascript":
     
     # Set defaults for optional vars
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
-    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
+    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-4o}"
     
     # Set mode description
     if [ "{{env}}" = "hyperlight" ]; then
@@ -251,7 +254,7 @@ k8s-deploy env="" lang="javascript":
     fi
     
     # Validate required env vars
-    required_vars=("IMAGE_REGISTRY_NAME" "IMAGE_REGISTRY_DOMAIN" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_OPENAI_ENDPOINT")
+    required_vars=("IMAGE_REGISTRY_NAME" "IMAGE_REGISTRY_DOMAIN" "MANAGED_IDENTITY_CLIENT_ID" "AZURE_FOUNDRY_RESOURCE")
     for var in "${required_vars[@]}"; do
         if [ -z "${!var:-}" ]; then
             echo "❌ Required environment variable $var is not set"
@@ -262,7 +265,8 @@ k8s-deploy env="" lang="javascript":
     
     echo "🚀 Deploying with:"
     echo "   IMAGE: ${IMAGE_REGISTRY_NAME}.${IMAGE_REGISTRY_DOMAIN}/local-code-interpreter:${IMAGE_TAG}"
-    echo "   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}"
+    echo "   AZURE_FOUNDRY_RESOURCE: ${AZURE_FOUNDRY_RESOURCE}"
+    echo "   AZURE_FOUNDRY_MODEL_NAME: ${AZURE_FOUNDRY_MODEL_NAME}"
     echo "   MANAGED_IDENTITY_CLIENT_ID: ${MANAGED_IDENTITY_CLIENT_ID}"
     echo "   MODE: ${MODE_DESC}"
     echo ""
@@ -292,8 +296,8 @@ k8s-delete:
     export IMAGE_REGISTRY_NAME="${IMAGE_REGISTRY_NAME:-dummy}"
     export IMAGE_REGISTRY_DOMAIN="${IMAGE_REGISTRY_DOMAIN:-dummy}"
     export MANAGED_IDENTITY_CLIENT_ID="${MANAGED_IDENTITY_CLIENT_ID:-dummy}"
-    export AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT:-dummy}"
-    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-dummy}"
+    export AZURE_FOUNDRY_RESOURCE="${AZURE_FOUNDRY_RESOURCE:-dummy}"
+    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-dummy}"
     kubectl kustomize k8s/ | envsubst | kubectl delete --ignore-not-found -f -
 
 # Preview what will be deployed (dry-run with variable substitution)
@@ -301,7 +305,7 @@ k8s-delete:
 k8s-dry-run env="" lang="javascript":
     #!/usr/bin/env bash
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
-    export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="${AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME:-gpt-4o}"
+    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-4o}"
     if [ "{{env}}" = "hyperlight" ]; then
         kubectl kustomize k8s/ | envsubst | \
             sed 's/imagePullPolicy: Always/imagePullPolicy: Always\n        args:\n        - "--hyperlight"\n        - "{{lang}}"/'
@@ -340,7 +344,7 @@ AZURE_RESOURCE_GROUP := env_var_or_default("AZURE_RESOURCE_GROUP", "local-code-i
 AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "westus3")
 AKS_CLUSTER := env_var_or_default("AKS_CLUSTER", "local-code-interpreter-aks")
 AKS_NODE_VM_SIZE := env_var_or_default("AKS_NODE_VM_SIZE", "Standard_D2s_v3")
-AZURE_OPENAI_RESOURCE := env_var_or_default("AZURE_OPENAI_RESOURCE", "")
+AZURE_FOUNDRY_RESOURCE := env_var_or_default("AZURE_FOUNDRY_RESOURCE", "")
 KVM_NODE_POOL_NAME := env_var_or_default("KVM_NODE_POOL_NAME", "kvmpool")
 MANAGED_IDENTITY_CLIENT_ID := env_var_or_default("MANAGED_IDENTITY_CLIENT_ID", "")
 
@@ -478,8 +482,8 @@ azure-role-assign:
         echo "❌ MANAGED_IDENTITY_CLIENT_ID not set. Run: just azure-identity-show"; \
         exit 1; \
     fi
-    if [ -z "{{AZURE_OPENAI_RESOURCE}}" ]; then \
-        echo "❌ AZURE_OPENAI_RESOURCE not set"; \
+    if [ -z "{{AZURE_FOUNDRY_RESOURCE}}" ]; then \
+        echo "❌ AZURE_FOUNDRY_RESOURCE not set"; \
         exit 1; \
     fi
     subscriptionId=$(az account show --query id -o tsv)
@@ -487,7 +491,7 @@ azure-role-assign:
     az role assignment create \
         --assignee {{MANAGED_IDENTITY_CLIENT_ID}} \
         --role "Cognitive Services OpenAI User" \
-        --scope "/subscriptions/$subscriptionId/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.CognitiveServices/accounts/{{AZURE_OPENAI_RESOURCE}}"
+        --scope "/subscriptions/$subscriptionId/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.CognitiveServices/accounts/{{AZURE_FOUNDRY_RESOURCE}}"
     echo "✅ Role assigned!"
 
 # =============================================================================
@@ -551,8 +555,8 @@ azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus" model="gpt-4o":
     echo "✅ Deployment complete!"
     echo ""
     echo "Add to your .env file:"
-    echo "AZURE_OPENAI_ENDPOINT=$endpoint"
-    echo "AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME={{model}}"
+    echo "AZURE_FOUNDRY_RESOURCE=$foundryName"
+    echo "AZURE_FOUNDRY_MODEL_NAME={{model}}"
     echo ""
     echo "⚠️  Don't forget to run: just azure-foundry-grant-access {{rg}}"
 

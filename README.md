@@ -77,13 +77,14 @@ OPENAI_API_KEY="your-api-key"
 OPENAI_RESPONSES_MODEL_ID="gpt-4o-mini"
 ```
 
-### Option 2: Azure AI Foundry (Azure OpenAI)
+### Option 2: Azure AI Foundry (OpenAI or Claude models)
 Set in your `.env` file:
 ```
-AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
-AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="your-deployment"
+AZURE_FOUNDRY_RESOURCE="your-resource-name"
+AZURE_FOUNDRY_MODEL_NAME="claude-opus-4-5"
+# Optional: AZURE_FOUNDRY_API_KEY for local dev, otherwise use `az login`
 ```
-Then authenticate with `az login` before running.
+Claude models are auto-detected when the model name contains "claude".
 
 ## DevUI Web Interface
 
@@ -106,7 +107,7 @@ DevUI provides:
 
 Use Docker for local testing when you prefer a containerized runtime. Provide credentials via `.env`:
 - OpenAI: set `OPENAI_API_KEY`
-- Azure AI Foundry: set `AZURE_OPENAI_API_KEY` or authenticate with `az login` when running in AKS
+- Azure AI Foundry: set `AZURE_FOUNDRY_API_KEY`
 
 ```bash
 just docker-build              # Build the container image
@@ -149,18 +150,17 @@ just azure-identity-create
 export MANAGED_IDENTITY_CLIENT_ID=$(just azure-identity-show)
 just azure-identity-federate
 
-# 5. Assign Azure OpenAI access to managed identity
+# 5. Assign Azure AI Foundry access to managed identity
 ## Note: This step may be blocked by conditional access policies.
 ## If it fails, manually assign "Cognitive Services OpenAI User" role to 
-## the "local-code-interpreter" managed identity on your Azure OpenAI resource.
-export AZURE_OPENAI_RESOURCE=$(just azure-foundry-show)
+## the "local-code-interpreter" managed identity on your Azure AI Foundry resource.
+export AZURE_FOUNDRY_RESOURCE=$(just azure-foundry-show)
 just azure-role-assign
 
 # 6. Set environment variables for deployment
 export IMAGE_REGISTRY_NAME="your-acr"  # e.g., hyperlightacr
 export IMAGE_REGISTRY_DOMAIN="azurecr.io"
-export AZURE_OPENAI_ENDPOINT="https://${AZURE_OPENAI_RESOURCE}.openai.azure.com/"
-export AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME="gpt-4o"
+export AZURE_FOUNDRY_MODEL_NAME="claude-opus-4-5"
 # MANAGED_IDENTITY_CLIENT_ID already set from step 4
 
 # 7. Build and push container image with Hyperlight support
