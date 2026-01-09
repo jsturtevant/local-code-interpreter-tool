@@ -87,7 +87,7 @@ maturin develop --features python
 
 ### "/dev/kvm not accessible"
 
-The setup script automatically attempts to enable KVM access. If it fails, you can enable it manually:
+The setup script will fail if KVM is not accessible. Enable KVM access manually using one of the following options:
 
 ```bash
 # Option 1: Create udev rule for persistent access (recommended for CI/servers)
