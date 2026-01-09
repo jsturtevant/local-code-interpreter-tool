@@ -185,9 +185,9 @@ just k8s-deploy
 
 **Note:** Hyperlight requires:
 - Docker image built with `WITH_HYPERLIGHT=true` (step 1 above)
-- Hyperlight device plugin installed on the cluster
+- Hyperlight device plugin installed on the cluster (see Full Setup below)
 - Nodes with KVM support (the `kvmpool` node pool)
-- The deployment already includes `runtimeClassName: hyperlight-kvm` and `hyperlight.dev/hypervisor: "1"` resource limit
+- The deployment uses `hyperlight.dev/hypervisor: "1"` resource limit via the device plugin
 
 #### Full Setup (new cluster)
 
@@ -195,17 +195,39 @@ just k8s-deploy
 # Create AKS cluster with workload identity
 just azure-aks-create
 
+# Create Azure Container Registry
+just azure-create-acr
+
+# Attach ACR to AKS (allows pulling images without imagePullSecrets)
+just azure-aks-attach-acr
+
+# Add KVM-enabled node pool for Hyperlight
+just azure-aks-deploy-kvm-pool
+
+# Deploy Hyperlight device plugin
+just azure-aks-deploy-device-plugin
+
+# Verify device plugin is running
+just azure-aks-plugin-status
+
 # Then follow the Quick Deploy steps above
 ```
 
 #### Useful Commands
 
 ```bash
+# Kubernetes
 just k8s-status            # View deployment status
 just k8s-logs              # Tail pod logs
 just k8s-port-forward      # Port forward to localhost:8090
 just k8s-delete            # Remove all resources
 just k8s-deploy-hyperlight # Deploy with Hyperlight enabled
+
+# Azure/AKS
+just acr-login                     # Log in to Azure Container Registry
+just azure-aks-deploy-kvm-pool     # Add KVM-enabled node pool
+just azure-aks-deploy-device-plugin # Deploy Hyperlight device plugin
+just azure-aks-plugin-status       # Check device plugin status
 ```
 
 ### Hyperlight on Kubernetes
