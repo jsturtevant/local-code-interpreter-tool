@@ -36,26 +36,45 @@ install-dev:
     {{venv}} pip install -r requirements-dev.txt
 
 # Install hyperlight-nanvix Python bindings (requires Rust nightly toolchain)
+# Skips gracefully if Rust is not available (optional for basic functionality)
 install-nanvix:
-    @{{check-venv}}
-    @echo "📦 Installing hyperlight-nanvix Python bindings..."
-    @if ! command -v rustup &> /dev/null; then \
-        echo "❌ rustup not found. Please install Rust: https://rustup.rs"; \
-        exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    # Check venv exists
+    {{check-venv}}
+    
+    echo "📦 Installing hyperlight-nanvix Python bindings..."
+    
+    # Find rustup - check PATH first, then common locations
+    RUSTUP_CMD=""
+    if command -v rustup &> /dev/null; then
+        RUSTUP_CMD="rustup"
+    elif [ -x "$HOME/.cargo/bin/rustup" ]; then
+        RUSTUP_CMD="$HOME/.cargo/bin/rustup"
     fi
-    @echo "🔧 Installing Rust nightly toolchain..."
-    rustup install nightly
-    @if [ ! -d "vendor/hyperlight-nanvix" ]; then \
-        echo "📥 Cloning hyperlight-nanvix..."; \
-        mkdir -p vendor; \
-        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix; \
-    else \
-        echo "📥 Updating hyperlight-nanvix..."; \
-        cd vendor/hyperlight-nanvix && git pull; \
+    
+    if [ -z "$RUSTUP_CMD" ]; then
+        echo "⚠️  rustup not found. Skipping hyperlight-nanvix installation."
+        echo "   To enable Hyperlight support, install Rust: https://rustup.rs"
+        exit 0
     fi
+    
+    echo "🔧 Installing Rust nightly toolchain..."
+    $RUSTUP_CMD install nightly
+    
+    if [ ! -d "vendor/hyperlight-nanvix" ]; then
+        echo "📥 Cloning hyperlight-nanvix..."
+        mkdir -p vendor
+        git clone https://github.com/hyperlight-dev/hyperlight-nanvix.git vendor/hyperlight-nanvix
+    else
+        echo "📥 Updating hyperlight-nanvix..."
+        cd vendor/hyperlight-nanvix && git pull
+    fi
+    
     {{venv}} pip install maturin
     cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
-    @echo "✅ hyperlight-nanvix installed successfully"
+    echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
 update:
