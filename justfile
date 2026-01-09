@@ -63,8 +63,8 @@ install-nanvix:
         echo "📥 Updating hyperlight-nanvix..."
         cd vendor/hyperlight-nanvix && git pull
     fi
-    {{venv}} && pip install maturin
-    {{venv}} && cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
+    {{venv}} pip install maturin
+    {{venv}} cd vendor/hyperlight-nanvix && VIRTUAL_ENV="$(cd ../.. && pwd)/.venv" maturin develop --features python
     echo "✅ hyperlight-nanvix installed successfully"
 
 # Update dependencies
