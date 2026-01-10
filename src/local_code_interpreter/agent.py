@@ -66,24 +66,24 @@ def _create_chat_client():
         from agent_framework.azure import AzureOpenAIResponsesClient
 
         resource = os.getenv("AZURE_FOUNDRY_RESOURCE")
-        endpoint = f"https://{resource}.openai.azure.com"
-        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "gpt-4o")
+        foundry_endpoint = f"https://{resource}.openai.azure.com"
+        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "gpt-5.1-codex-mini")
 
         # Check for API key first (local dev), then fall back to DefaultAzureCredential
         api_key = os.getenv("AZURE_FOUNDRY_API_KEY")
         if api_key:
             return AzureOpenAIResponsesClient(
                 api_key=api_key,
-                azure_endpoint=endpoint,
-                azure_deployment=model_name,
+                endpoint=foundry_endpoint,
+                deployment_name=model_name,
             )
         else:
             from azure.identity import DefaultAzureCredential
 
             return AzureOpenAIResponsesClient(
                 credential=DefaultAzureCredential(),
-                azure_endpoint=endpoint,
-                azure_deployment=model_name,
+                endpoint=foundry_endpoint,
+                deployment_name=model_name,
             )
     else:
         return OpenAIResponsesClient()
@@ -313,7 +313,7 @@ def create_interpreter_agent(
     if _is_azure_foundry_claude_configured():
         # Use Anthropic client for Claude models
         client = _create_anthropic_client()
-        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "claude-opus-4-5")
+        model_name = os.getenv("AZURE_FOUNDRY_MODEL_NAME", "gpt-5.1-codex-mini")
         return client.create_agent(  # type: ignore[no-any-return]
             name=name,
             description=description,

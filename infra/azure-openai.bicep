@@ -19,6 +19,9 @@ param capacity int = 30
 @description('Model format/provider (OpenAI, Anthropic, etc.)')
 param modelFormat string = 'OpenAI'
 
+@description('Model version (e.g., 20251101 for Claude models, leave empty for latest OpenAI)')
+param modelVersion string = ''
+
 @description('Name of the Foundry project')
 param projectName string = '${baseName}-project'
 
@@ -70,6 +73,7 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01
     model: {
       format: modelFormat
       name: modelName
+      version: modelVersion != '' ? modelVersion : null
     }
   }
 }
