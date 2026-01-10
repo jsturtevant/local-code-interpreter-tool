@@ -231,7 +231,7 @@ K8S_SERVICE_ACCOUNT := "local-code-interpreter"
 # - IMAGE_TAG: Image tag (default: latest)
 # - MANAGED_IDENTITY_CLIENT_ID: Azure managed identity client ID
 # - AZURE_FOUNDRY_RESOURCE: Azure AI Foundry resource name
-# - AZURE_FOUNDRY_MODEL_NAME: Model deployment name (gpt-4o, claude-opus-4-5, etc.)
+# - AZURE_FOUNDRY_MODEL_NAME: Model deployment name (gpt-5.1-codex-mini, gpt-4o, claude-opus-4-5, etc.)
 
 # Deploy to Kubernetes using kustomize + envsubst for variable substitution
 # Usage: just k8s-deploy [env] [lang]
@@ -244,7 +244,7 @@ k8s-deploy env="" lang="javascript":
     
     # Set defaults for optional vars
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
-    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-4o}"
+    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-5.1-codex-mini}"
     
     # Set mode description
     if [ "{{env}}" = "hyperlight" ]; then
@@ -305,7 +305,7 @@ k8s-delete:
 k8s-dry-run env="" lang="javascript":
     #!/usr/bin/env bash
     export IMAGE_TAG="${IMAGE_TAG:-latest}"
-    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-4o}"
+    export AZURE_FOUNDRY_MODEL_NAME="${AZURE_FOUNDRY_MODEL_NAME:-gpt-5.1-codex-mini}"
     if [ "{{env}}" = "hyperlight" ]; then
         kubectl kustomize k8s/ | envsubst | \
             sed 's/imagePullPolicy: Always/imagePullPolicy: Always\n        args:\n        - "--hyperlight"\n        - "{{lang}}"/'
@@ -341,7 +341,7 @@ k8s-logs-debug lines="200":
 # Azure configuration for AKS
 AZURE_SUBSCRIPTION := env_var_or_default("AZURE_SUBSCRIPTION", "")
 AZURE_RESOURCE_GROUP := env_var_or_default("AZURE_RESOURCE_GROUP", "local-code-interpreter-rg")
-AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "westus3")
+AZURE_LOCATION := env_var_or_default("AZURE_LOCATION", "eastus2")
 AKS_CLUSTER := env_var_or_default("AKS_CLUSTER", "local-code-interpreter-aks")
 AKS_NODE_VM_SIZE := env_var_or_default("AKS_NODE_VM_SIZE", "Standard_D2s_v3")
 AZURE_FOUNDRY_RESOURCE := env_var_or_default("AZURE_FOUNDRY_RESOURCE", "")
@@ -534,11 +534,31 @@ azure-foundry-show rg="local-code-interpreter-rg":
     @az cognitiveservices account list -g "{{rg}}" --query "[?kind=='AIServices'].name | [0]" -o tsv
 
 # Deploy Azure AI Foundry resources (hub, project, and model)
-azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus" model="gpt-4o":
+# Note: Claude models are only available in eastus2 and swedencentral
+azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus2" model="gpt-5.1-codex-mini":
     #!/usr/bin/env bash
     set -euo pipefail
     baseName="code-interp-$(whoami)"
     echo "🚀 Deploying Azure AI Foundry: {{model}} in {{loc}}"
+    
+    # Determine model format based on model name
+    if [[ "{{model}}" == claude* ]]; then
+      modelFormat="Anthropic"
+    else
+      modelFormat="OpenAI"
+    fi
+    
+    # Get the latest version for the model
+    modelVersion=$(az cognitiveservices model list --location "{{loc}}" -o json 2>/dev/null | \
+      jq -r --arg name "{{model}}" '[.[] | select(.model.name == $name)] | sort_by(.model.version) | last | .model.version // empty')
+    if [ -z "$modelVersion" ]; then
+      echo "❌ Model {{model}} not found in {{loc}}. Check available models with:"
+      echo "   az cognitiveservices model list --location {{loc}} -o json | jq '[.[].model.name] | unique | .[]'"
+      exit 1
+    fi
+    echo "   Model format: $modelFormat"
+    echo "   Model version: $modelVersion"
+    
     if ! az group exists -n "{{rg}}" --output tsv | grep -q true; then \
       echo "Creating resource group {{rg}}..."; \
       az group create -n "{{rg}}" -l "{{loc}}"; \
@@ -549,6 +569,8 @@ azure-foundry-deploy rg="local-code-interpreter-rg" loc="eastus" model="gpt-4o":
       --parameters \
         baseName="$baseName" \
         modelName="{{model}}" \
+        modelFormat="$modelFormat" \
+        modelVersion="$modelVersion" \
         location="{{loc}}"
     endpoint=$(az deployment group show -g "{{rg}}" -n azure-openai --query properties.outputs.endpoint.value -o tsv)
     foundryName=$(az deployment group show -g "{{rg}}" -n azure-openai --query properties.outputs.foundryName.value -o tsv)
@@ -592,7 +614,7 @@ azure-foundry-list-deleted:
     az cognitiveservices account list-deleted -o table
 
 # Purge soft-deleted Cognitive Services account
-azure-foundry-purge-deleted name loc="eastus" rg="local-code-interpreter-rg":
+azure-foundry-purge-deleted name loc="eastus2" rg="local-code-interpreter-rg":
     #!/usr/bin/env bash
     set -euo pipefail
     echo "🗑️  Purging soft-deleted account '{{name}}' in {{loc}}..."

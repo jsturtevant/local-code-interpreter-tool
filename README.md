@@ -81,7 +81,7 @@ OPENAI_RESPONSES_MODEL_ID="gpt-4o-mini"
 Set in your `.env` file:
 ```
 AZURE_FOUNDRY_RESOURCE="your-resource-name"
-AZURE_FOUNDRY_MODEL_NAME="claude-opus-4-5"
+AZURE_FOUNDRY_MODEL_NAME="gpt-5.1-codex-mini"
 # Optional: AZURE_FOUNDRY_API_KEY for local dev, otherwise use `az login`
 ```
 Claude models are auto-detected when the model name contains "claude".
@@ -160,7 +160,7 @@ just azure-role-assign
 # 6. Set environment variables for deployment
 export IMAGE_REGISTRY_NAME="your-acr"  # e.g., hyperlightacr
 export IMAGE_REGISTRY_DOMAIN="azurecr.io"
-export AZURE_FOUNDRY_MODEL_NAME="claude-opus-4-5"
+export AZURE_FOUNDRY_MODEL_NAME="gpt-5.1-codex-mini"
 # MANAGED_IDENTITY_CLIENT_ID already set from step 4
 
 # 7. Build and push container image with Hyperlight support
@@ -206,6 +206,7 @@ just azure-aks-get-credentials      # Get kubectl credentials
 ## Troubleshooting
 - Azure permissions: If CLI deployment fails, assign the “Azure AI User” role to your account on the Foundry resource in the portal, then run `az login` again.
 - AKS device plugin: Use `just azure-aks-plugin-status` to confirm Hyperlight device plugin is ready and nodes in `kvmpool` advertise KVM.
+- Claude/Anthropic models: Deploying Claude models (claude-opus-4-5, claude-sonnet-4-5, etc.) via `just azure-foundry-deploy` requires Azure quota for Anthropic models, which may not be available in all subscriptions. Claude support has not been fully tested due to quota limitations.
 
 ## Learn More
 

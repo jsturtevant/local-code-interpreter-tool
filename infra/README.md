@@ -9,8 +9,8 @@ Deploy Microsoft Foundry with a project and model:
 ```bash
 # Set your parameters
 rg="local-code-interpreter-rg"
-loc="eastus2"  # or swedencentral, westus3, etc.
-model="gpt-4o"  # See model options below
+loc="eastus2"  # Claude models available in: eastus2, swedencentral
+model="gpt-5.1-codex-mini"  # See model options below
 baseName="code-interp-$(whoami)"
 
 # Create resource group if needed
