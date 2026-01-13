@@ -48,3 +48,8 @@ test-results.xml
 infra/*.json
 # Vendor directory (hyperlight-nanvix cloned here)
 vendor/
+
+# Azure Functions
+local.settings.json
+.python_packages/
+__azurite_*/
