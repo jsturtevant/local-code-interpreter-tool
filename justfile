@@ -172,6 +172,72 @@ test-ci:
     {{venv}} pytest tests/ -v --cov=src/local_code_interpreter --cov-report=xml --cov-report=html --junitxml=test-results.xml
 
 # =============================================================================
+# Azure Functions (Durable Agent)
+# =============================================================================
+
+# Start Azurite (Azure Storage emulator) in background
+func-azurite:
+    @docker rm -f azurite 2>/dev/null || true
+    docker run -d --name azurite -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
+    @echo "✅ Azurite started (container: azurite)"
+
+# Start Durable Task Scheduler emulator in background
+func-dts:
+    @docker rm -f dts-emulator 2>/dev/null || true
+    docker run -d --name dts-emulator -p 8080:8080 -p 8082:8082 mcr.microsoft.com/dts/dts-emulator:latest
+    @echo "✅ DTS emulator started (container: dts-emulator)"
+
+# Stop Azure Functions emulators
+func-stop:
+    @docker rm -f azurite dts-emulator 2>/dev/null || true
+    @echo "✅ Emulators stopped"
+
+# Run Azure Functions locally (starts emulators in background first)
+func-start: func-azurite func-dts
+    @{{check-venv}}
+    @echo "⏳ Waiting for emulators to be ready..."
+    @sleep 2
+    @test -f local.settings.json || (echo "❌ local.settings.json not found. Copy from local.settings.sample.json" && exit 1)
+    {{venv}} func start
+
+# Interactive test session with the agent
+# NOTE: Multi-turn conversations with tools don't work due to Agent Framework bug:
+# https://github.com/microsoft/agent-framework/issues/3187
+func-test message="Hello, calculate 2+2":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    echo "You: {{message}}"
+    response=$(curl -s -D /tmp/headers.txt -X POST http://localhost:7071/api/agents/CodeInterpreter/run \
+      -H "Content-Type: text/plain" \
+      -d "{{message}}")
+    thread_id=$(grep -i "x-ms-thread-id:" /tmp/headers.txt | cut -d' ' -f2 | tr -d '\r\n')
+
+    echo "Agent: $response"
+    echo ""
+    echo "Thread ID: $thread_id"
+
+    echo "⚠️  Multi-turn conversations with tools don't work yet."
+    echo "See: https://github.com/microsoft/agent-framework/issues/3187"
+    
+    # TODO: Uncomment when Agent Framework bug #3187 is fixed
+    # while true; do
+    #     read -p "You: " user_input
+    #     if [ "$user_input" = "quit" ] || [ "$user_input" = "exit" ]; then
+    #         echo "Goodbye!"
+    #         break
+    #     fi
+    #     response=$(curl -s -X POST "http://localhost:7071/api/agents/CodeInterpreter/run?thread_id=${thread_id}" \
+    #       -H "Content-Type: text/plain" \
+    #       -d "$user_input")
+    #     echo "Agent: $response"
+    # done
+
+# Health check
+func-health:
+    curl -s http://localhost:7071/api/health
+
+# =============================================================================
 # Docker
 # =============================================================================
 
