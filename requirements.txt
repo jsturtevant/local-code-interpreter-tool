@@ -6,6 +6,10 @@ agent-framework-devui
 agent-framework-anthropic
 anthropic>=0.74.0
 
+# Azure Functions Durable Agent
+agent-framework-azurefunctions
+azure-functions
+
 # Common dependencies
 python-dotenv
 pydantic
