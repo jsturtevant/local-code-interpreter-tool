@@ -111,10 +111,11 @@ class TestRetryOnRateLimitMiddleware:
 
     @pytest.mark.asyncio
     async def test_retries_on_too_many_requests_message(self):
-        """Middleware retries when exception message starts with 'too many requests'.
+        """Middleware retries when exception message starts with 'Too Many Requests'.
 
-        Note: The regex uses re.match() which only matches from the start of the string,
-        so the message must begin with 'too many requests' or '429'.
+        Note: tenacity's retry_if_exception_message(match=...) uses re.match() internally,
+        which only matches from the start of the string. The message must begin with
+        'too many requests' or '429' (case-insensitive).
         """
         middleware = RetryOnRateLimitMiddleware(
             max_retries=2,
